@@ -1,6 +1,6 @@
 /**
  * @file tftp_logger.h
- * @brief TFTPサーバーのロギング機能
+ * @brief TFTP server logging functionality
  */
 
 #ifndef TFTP_LOGGER_H_
@@ -17,7 +17,7 @@
 
 namespace tftpserver {
 
-// ログレベル定義
+// Log level definitions
 enum LogLevel {
     kLogTrace = 0,
     kLogDebug = 1,
@@ -29,45 +29,45 @@ enum LogLevel {
 
 /**
  * @class TftpLogger
- * @brief TFTPサーバーのロギング機能を提供するクラス
+ * @brief Class that provides TFTP server logging functionality
  */
 class TFTP_EXPORT TftpLogger {
 public:
     /**
-     * @brief シングルトンインスタンスを取得
-     * @return TftpLoggerインスタンス
+     * @brief Get singleton instance
+     * @return TftpLogger instance
      */
     static TftpLogger& GetInstance();
 
     /**
-     * @brief デストラクタ
+     * @brief Destructor
      */
     ~TftpLogger();
 
     /**
-     * @brief ログファイルを設定
-     * @param filename ログファイル名
+     * @brief Set log file
+     * @param filename Log filename
      */
     void SetLogFile(const std::string& filename);
 
     /**
-     * @brief ログレベルを設定
-     * @param level ログレベル
+     * @brief Set log level
+     * @param level Log level
      */
     void SetLogLevel(int level);
 
     /**
-     * @brief ログメッセージを出力
-     * @param level ログレベル
-     * @param message ログメッセージ
+     * @brief Output log message
+     * @param level Log level
+     * @param message Log message
      */
     void Log(int level, const std::string& message);
 
     /**
-     * @brief フォーマット付きログメッセージを出力
-     * @param level ログレベル
-     * @param format フォーマット文字列
-     * @param ... 可変引数
+     * @brief Output formatted log message
+     * @param level Log level
+     * @param format Format string
+     * @param ... Variable arguments
      */
     template<typename... Args>
     void LogFormat(int level, const char* format, Args... args) {
@@ -77,7 +77,7 @@ public:
             Log(level, buffer);
 
 #ifdef _WIN32
-            // Windows固有のデバッグ出力（OutputDebugStringAを使用）
+            // Windows-specific debug output (using OutputDebugStringA)
             char debug_buffer[1024];
             const char* level_str = "INFO";
             switch (level) {
@@ -106,7 +106,7 @@ private:
 
 
 
-// ロギングマクロ
+// Logging macros
 #define TFTP_TRACE(...) tftpserver::TftpLogger::GetInstance().LogFormat(tftpserver::kLogTrace, __VA_ARGS__)
 #define TFTP_DEBUG(...) tftpserver::TftpLogger::GetInstance().LogFormat(tftpserver::kLogDebug, __VA_ARGS__)
 #define TFTP_INFO(...) tftpserver::TftpLogger::GetInstance().LogFormat(tftpserver::kLogInfo, __VA_ARGS__)

@@ -1,6 +1,6 @@
 /**
  * @file tftp_common.h
- * @brief TFTPプロトコルの共通定義
+ * @brief Common definitions for TFTP protocol
  */
 
 #ifndef TFTP_COMMON_H_
@@ -10,7 +10,7 @@
 #include <stdexcept>
 #include <ostream>
 
-// DLL エクスポート/インポート定義（Windows用）
+// DLL export/import definitions (for Windows)
 #if defined(_MSC_VER) && defined(TFTP_SHARED_LIBRARY)
     #ifdef TFTP_BUILDING_LIBRARY
         #define TFTP_EXPORT __declspec(dllexport)
@@ -23,13 +23,13 @@
 
 namespace tftpserver {
 
-// TFTPプロトコル定数
+// TFTP protocol constants
 constexpr uint16_t kDefaultTftpPort = 69;
-constexpr size_t kMaxPacketSize = 516;  // 512 + 4 (ヘッダー)
+constexpr size_t kMaxPacketSize = 516;  // 512 + 4 (header)
 constexpr size_t kMaxDataSize = 512;
-constexpr int kDefaultTimeout = 5;  // 秒
+constexpr int kDefaultTimeout = 5;  // seconds
 
-// 操作コード
+// Operation codes
 enum class OpCode : uint16_t {
     kReadRequest = 1,
     kWriteRequest = 2,
@@ -39,7 +39,7 @@ enum class OpCode : uint16_t {
     kOACK = 6
 };
 
-// エラーコード
+// Error codes
 enum class ErrorCode : uint16_t {
     kNotDefined = 0,
     kFileNotFound = 1,
@@ -51,14 +51,14 @@ enum class ErrorCode : uint16_t {
     kNoSuchUser = 7
 };
 
-// 転送モード
+// Transfer modes
 enum class TransferMode {
     kNetAscii,
     kOctet,
     kMail
 };
 
-// カスタム例外クラス
+// Custom exception class
 class TFTP_EXPORT TftpException : public std::runtime_error {
 public:
     explicit TftpException(const std::string& message) : std::runtime_error(message) {}

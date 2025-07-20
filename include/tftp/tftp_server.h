@@ -14,73 +14,73 @@
 
 namespace tftpserver {
 
-// 前方宣言
+// Forward declaration
 namespace internal {
 class TftpServerImpl;
 }
 
 /**
  * @class TftpServer
- * @brief TFTPサーバー機能を提供するクラス
+ * @brief Class that provides TFTP server functionality
  */
 class TFTP_EXPORT TftpServer {
  public:
   /**
-   * @brief コンストラクタ
-   * @param root_dir ルートディレクトリ
-   * @param port ポート番号（デフォルトは69）
+   * @brief Constructor
+   * @param root_dir Root directory
+   * @param port Port number (default is 69)
    */
   TftpServer(const std::string& root_dir, uint16_t port = kDefaultTftpPort);
 
   /**
-   * @brief デストラクタ
+   * @brief Destructor
    */
   ~TftpServer();
 
   /**
-   * @brief サーバーを起動する
-   * @return 成功した場合はtrue、失敗した場合はfalse
+   * @brief Start the server
+   * @return true if successful, false if failed
    */
   bool Start();
 
   /**
-   * @brief サーバーを停止する
+   * @brief Stop the server
    */
   void Stop();
 
   /**
-   * @brief サーバーが実行中かどうかを確認
-   * @return 実行中の場合はtrue
+   * @brief Check if server is running
+   * @return true if running
    */
   bool IsRunning() const;
 
   /**
-   * @brief ファイル読み取りコールバックを設定
-   * @param callback ファイル読み取りのコールバック関数
+   * @brief Set file read callback
+   * @param callback File read callback function
    */
   void SetReadCallback(std::function<bool(const std::string&, std::vector<uint8_t>&)> callback);
 
   /**
-   * @brief ファイル書き込みコールバックを設定
-   * @param callback ファイル書き込みのコールバック関数
+   * @brief Set file write callback
+   * @param callback File write callback function
    */
   void SetWriteCallback(std::function<bool(const std::string&, const std::vector<uint8_t>&)> callback);
 
   /**
-   * @brief セキュリティモードの設定
-   * @param secure セキュアモードを有効にする場合はtrue
+   * @brief Set security mode
+   * @param secure true to enable secure mode
    */
   void SetSecureMode(bool secure);
 
   /**
-   * @brief 最大転送サイズの設定
-   * @param size 最大転送サイズ（バイト）
+   * @brief Set maximum transfer size
+   * @param size Maximum transfer size (bytes)
    */
   void SetMaxTransferSize(size_t size);
 
   /**
-   * @brief タイムアウト値の設定
-   * @param seconds タイムアウト（秒）
+   * @brief Set timeout value
+   * @param seconds Timeout (seconds)
    */
   void SetTimeout(int seconds);
 
@@ -91,57 +91,57 @@ class TFTP_EXPORT TftpServer {
 
 /**
  * @class TftpClient
- * @brief TFTPクライアント機能を提供するクラス（libcurlベース）
+ * @brief Class that provides TFTP client functionality (libcurl-based)
  */
 class TFTP_EXPORT TftpClient {
  public:
   /**
-   * @brief コンストラクタ
+   * @brief Constructor
    */
   TftpClient();
 
   /**
-   * @brief デストラクタ
+   * @brief Destructor
    */
   ~TftpClient();
 
   /**
-   * @brief ファイルをダウンロードする
-   * @param host ホスト名またはIPアドレス
-   * @param filename ファイル名
-   * @param output_buffer 出力バッファ
-   * @param port ポート番号（デフォルトは69）
-   * @return 成功した場合はtrue、失敗した場合はfalse
+   * @brief Download a file
+   * @param host Hostname or IP address
+   * @param filename Filename
+   * @param output_buffer Output buffer
+   * @param port Port number (default is 69)
+   * @return true if successful, false if failed
    */
   bool DownloadFile(const std::string& host, const std::string& filename, 
                     std::vector<uint8_t>& output_buffer, uint16_t port = kDefaultTftpPort);
 
   /**
-   * @brief ファイルをアップロードする
-   * @param host ホスト名またはIPアドレス
-   * @param filename ファイル名
-   * @param data データバッファ
-   * @param port ポート番号（デフォルトは69）
-   * @return 成功した場合はtrue、失敗した場合はfalse
+   * @brief Upload a file
+   * @param host Hostname or IP address
+   * @param filename Filename
+   * @param data Data buffer
+   * @param port Port number (default is 69)
+   * @return true if successful, false if failed
    */
   bool UploadFile(const std::string& host, const std::string& filename, 
                   const std::vector<uint8_t>& data, uint16_t port = kDefaultTftpPort);
 
   /**
-   * @brief タイムアウト値の設定
-   * @param seconds タイムアウト（秒）
+   * @brief Set timeout value
+   * @param seconds Timeout (seconds)
    */
   void SetTimeout(int seconds);
 
   /**
-   * @brief 転送モードの設定
-   * @param mode 転送モード
+   * @brief Set transfer mode
+   * @param mode Transfer mode
    */
   void SetTransferMode(TransferMode mode);
 
   /**
-   * @brief 最後のエラーメッセージを取得
-   * @return エラーメッセージ
+   * @brief Get last error message
+   * @return Error message
    */
   std::string GetLastError() const;
 
