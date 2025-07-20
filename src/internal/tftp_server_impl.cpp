@@ -41,7 +41,7 @@ namespace internal {
 
 constexpr int kMaxRetries = 5;
 constexpr int kRetryTimeoutMs = 1000;
-// kMaxPacketSizeとkMaxDataSizeはtftp_common.hで既に定義されているため、ここでは再定義しない
+// kMaxPacketSize and kMaxDataSize are already defined in tftp_common.h, so not redefined here
 
 TftpServerImpl::TftpServerImpl(const std::string& root_dir, uint16_t port)
     : root_dir_(root_dir),
@@ -59,7 +59,7 @@ TftpServerImpl::TftpServerImpl(const std::string& root_dir, uint16_t port)
         root_dir_ += '/';
     }
     
-    // デフォルトのコールバック設定
+    // Set default callbacks
     read_callback_ = TftpServerImpl::DefaultReadHandler;
     write_callback_ = TftpServerImpl::DefaultWriteHandler;
 }
@@ -117,10 +117,10 @@ bool TftpServerImpl::Start() {
 void TftpServerImpl::Stop() {
     if (!running_) return;
     
-    // フラグを先に設定して、ServerLoopが早期に終了するようにする
+    // Set flag first so ServerLoop exits early
     running_ = false;
     
-    // ソケットをクローズ
+    // Close socket
     if (
 #ifdef _WIN32
         sockfd_ != INVALID_SOCKET
@@ -136,7 +136,7 @@ void TftpServerImpl::Stop() {
 #endif
     }
     
-    // スレッドの終了を待機
+    // Wait for thread to finish
     if (server_thread_.joinable()) {
         server_thread_.join();
     }
@@ -149,29 +149,29 @@ void TftpServerImpl::Stop() {
 }
 
 bool TftpServerImpl::IsRunning() const {
-    // サーバーが実行中かどうかを複数の条件でチェック
+    // Check if server is running with multiple conditions
     if (!running_) {
-        // runningフラグがfalseならサーバーは停止している
+        // If running flag is false, server is stopped
         return false;
     }
     
-    // ソケットが有効かどうかもチェック
+    // Also check if socket is valid
 #ifdef _WIN32
     if (sockfd_ == INVALID_SOCKET) {
 #else
     if (sockfd_ < 0) {
 #endif
-        // ソケットが無効ならサーバーは実行していない
+        // If socket is invalid, server is not running
         return false;
     }
     
-    // スレッドがjoin可能かどうかもチェック
+    // Also check if thread is joinable
     if (!server_thread_.joinable()) {
-        // スレッドがjoin不可能ならサーバーは実行していない
+        // If thread is not joinable, server is not running
         return false;
     }
     
-    // すべての条件を満たせばサーバーは実行中
+    // If all conditions are met, server is running
     return true;
 }
 
@@ -201,7 +201,7 @@ void TftpServerImpl::HandleClient(const std::vector<uint8_t>& initial_packet,
     try {
         TFTP_INFO("HandleClient called with packet size: %zu", initial_packet.size());
         
-        // デバッグ: パケットの内容を16進数でダンプ
+        // Debug: dump packet contents in hex
         std::string hex_dump;
         for (size_t i = 0; i < std::min(initial_packet.size(), size_t(100)); ++i) {
             char buf[4];
@@ -283,7 +283,7 @@ void TftpServerImpl::HandleReadRequest(
 
     (void)mode; // Suppress unused parameter warning
 
-    // データの読み込み
+    // Read data
     std::vector<uint8_t> file_data;
     bool success = read_callback_(filepath, file_data);
     
@@ -297,25 +297,25 @@ void TftpServerImpl::HandleReadRequest(
         return;
     }
     
-    // ブロック単位でデータを送信
+    // Send data in blocks
     uint16_t block_number = 1;
     size_t offset = 0;
     bool last_packet = false;
     
     do {
-        // 次のデータブロックの準備
+        // Prepare next data block
         size_t remaining = file_data.size() - offset;
         size_t block_size = (remaining > kMaxDataSize) ? kMaxDataSize : remaining;
         std::vector<uint8_t> block_data(file_data.begin() + offset, file_data.begin() + offset + block_size);
         
-        // データパケットの作成と送信
+        // Create and send data packet
         TftpPacket data_packet = TftpPacket::CreateData(block_number, block_data);
         if (!SendPacket(sock, client_addr, data_packet)) {
             TFTP_ERROR("Data packet send failed");
             return;
         }
         
-        // ACK待機
+        // Wait for ACK
         TftpPacket ack_packet;
         sockaddr_in ack_addr = {};
         if (!ReceivePacket(sock, ack_addr, ack_packet, timeout_seconds_ * 1000)) {
@@ -323,17 +323,17 @@ void TftpServerImpl::HandleReadRequest(
             return;
         }
         
-        // ACKの検証
+        // Validate ACK
         if (ack_packet.GetOpCode() != OpCode::kAcknowledge || ack_packet.GetBlockNumber() != block_number) {
             TFTP_ERROR("Invalid ACK");
             return;
         }
         
-        // 次のブロックの準備
+        // Prepare next block
         offset += block_size;
         block_number++;
         
-        // 最後のパケットかどうかをチェック
+        // Check if it's the last packet
         last_packet = (block_size < kMaxDataSize);
         
     } while (!last_packet);
@@ -353,7 +353,7 @@ void TftpServerImpl::HandleWriteRequest(
     
     (void)mode; // Suppress unused parameter warning
     
-    // tsizeオプションから期待ファイルサイズを取得
+    // Get expected file size from tsize option
     size_t expected_file_size = 0;
     bool has_expected_size = false;
     if (packet.HasOption("tsize")) {
@@ -367,47 +367,47 @@ void TftpServerImpl::HandleWriteRequest(
         }
     }
     
-    // オプションがある場合はOACK、ない場合は通常のACKを送信
+    // If options are present, send OACK, otherwise send normal ACK
     if (!packet.GetOptions().empty()) {
         TFTP_INFO("WRQ contains options, sending OACK");
         
-        // OACKパケットの作成（手動でシリアライズ）
+        // Create OACK packet (manually serialize)
         std::vector<uint8_t> oack_data;
         
-        // OpCode::kOACK (6) を追加（ネットワークバイトオーダー）
+        // Add OpCode::kOACK (6) (network byte order)
         uint16_t oack_opcode_network = htons(6);
         oack_data.resize(2);
         std::memcpy(&oack_data[0], &oack_opcode_network, sizeof(uint16_t));
         
-        // 対応するオプションを追加
+        // Add corresponding options
         for (const auto& option : packet.GetOptions()) {
             TFTP_INFO("Processing option: %s = %s", option.first.c_str(), option.second.c_str());
             
-            // オプション名を追加
+            // Add option name
             for (char c : option.first) {
                 oack_data.push_back(static_cast<uint8_t>(c));
             }
-            oack_data.push_back(0); // null終端
+            oack_data.push_back(0); // null-terminated
             
-            // オプション値を追加
+            // Add option value
             std::string value = option.second;
             
-            // tsizeオプションの処理
+            // Process tsize option
             if (option.first == "tsize") {
-                // WRQでクライアントが実際のファイルサイズを送信した場合、それをエコーバックする
-                // クライアントが0を送信した場合は0をエコーバックする
+                // If client sent actual file size, echo it back
+                // If client sent 0, echo 0 back
                 value = option.second;
                 TFTP_INFO("Echoing back tsize value: %s", value.c_str());
             }
-            // blksizeオプションの処理（デフォルトの512バイトをサポート）
+            // Process blksize option (support default 512 bytes)
             else if (option.first == "blksize") {
                 try {
                     int blksize = std::stoi(option.second);
                     if (blksize >= 8 && blksize <= 65464) {
-                        // 要求されたブロックサイズが有効範囲内なら受け入れる
+                        // Accept if requested block size is within valid range
                         value = option.second;
                     } else {
-                        // 無効な場合はデフォルトの512を使用
+                        // Use default 512 if invalid
                         value = "512";
                     }
                     TFTP_INFO("Block size negotiated: %s", value.c_str());
@@ -416,14 +416,14 @@ void TftpServerImpl::HandleWriteRequest(
                     value = "512";
                 }
             }
-            // timeoutオプションの処理（1-255秒の範囲で受け入れ）
+            // Process timeout option (accept 1-255 seconds range)
             else if (option.first == "timeout") {
                 try {
                     int timeout_val = std::stoi(option.second);
                     if (timeout_val >= 1 && timeout_val <= 255) {
                         value = option.second;
                     } else {
-                        value = "6"; // デフォルト値
+                        value = "6"; // Default value
                     }
                     TFTP_INFO("Timeout negotiated: %s seconds", value.c_str());
                 } catch (const std::exception& e) {
@@ -435,13 +435,13 @@ void TftpServerImpl::HandleWriteRequest(
             for (char c : value) {
                 oack_data.push_back(static_cast<uint8_t>(c));
             }
-            oack_data.push_back(0); // null終端
+            oack_data.push_back(0); // null-terminated
         }
         
-        // OACK送信（手動sendto方式）
+        // Send OACK (manual sendto)
         TFTP_INFO("Sending OACK packet with %zu bytes", oack_data.size());
         
-        // OACKパケットのヘックスダンプ
+        // OACK hex dump
         std::string hex_dump;
         for (size_t i = 0; i < oack_data.size(); ++i) {
             char buf[4];
@@ -450,7 +450,7 @@ void TftpServerImpl::HandleWriteRequest(
         }
         TFTP_INFO("OACK hex dump: %s", hex_dump.c_str());
         
-        // 直接sendtoでOACKを送信
+        // Send OACK directly using sendto
         int sent_bytes = sendto(sock, (const char*)oack_data.data(), static_cast<int>(oack_data.size()), 0,
                               (struct sockaddr*)&client_addr, sizeof(client_addr));
         if (sent_bytes != static_cast<int>(oack_data.size())) {
@@ -459,7 +459,7 @@ void TftpServerImpl::HandleWriteRequest(
         }
         TFTP_INFO("OACK sent successfully (%d bytes)", sent_bytes);
     } else {
-        // オプションがない場合は通常のACK 0を送信
+        // If no options, send normal ACK 0
         TFTP_INFO("WRQ without options, sending ACK 0");
         TftpPacket ack_packet = TftpPacket::CreateAck(0);
         if (!SendPacket(sock, client_addr, ack_packet)) {
@@ -469,16 +469,16 @@ void TftpServerImpl::HandleWriteRequest(
         TFTP_INFO("ACK 0 sent successfully");
     }
     
-    // データの受信
+    // Receive data
     std::vector<uint8_t> file_data;
     uint16_t expected_block = 1;
     bool last_packet = false;
     
-    // OACKを送信した場合、最初のデータパケットはブロック1から始まる
-    // 通常のACKを送信した場合も、最初のデータパケットはブロック1から始まる
+    // If OACK was sent, the first data packet starts from block 1
+    // If normal ACK was sent, the first data packet also starts from block 1
     
     do {
-        // データパケットの受信（クライアント専用ソケットを使用）
+        // Receive data packet (using client-specific socket)
         TftpPacket data_packet;
         sockaddr_in data_addr = {};
         TFTP_INFO("Waiting for data packet #%d on client socket", expected_block);
@@ -490,7 +490,7 @@ void TftpServerImpl::HandleWriteRequest(
         }
         TFTP_INFO("ReceivePacket completed successfully");
         
-        // データパケットの検証
+        // Validate data packet
         TFTP_INFO("Checking packet opcode: %d", static_cast<int>(data_packet.GetOpCode()));
         if (data_packet.GetOpCode() != OpCode::kData) {
             TFTP_ERROR("Invalid packet (not a data packet): OpCode=%d", static_cast<int>(data_packet.GetOpCode()));
@@ -506,14 +506,14 @@ void TftpServerImpl::HandleWriteRequest(
         }
         TFTP_INFO("Block number validation passed");
         
-        // データを追加
+        // Add data
         const std::vector<uint8_t>& block_data = data_packet.GetData();
         size_t prev_size = file_data.size();
         file_data.insert(file_data.end(), block_data.begin(), block_data.end());
         TFTP_INFO("Received data block #%d, prev_size=%zu, block_size=%zu bytes, total=%zu bytes", 
                  expected_block, prev_size, block_data.size(), file_data.size());
         
-        // ACKを送信（クライアント専用ソケットから送信元アドレスに）
+        // Send ACK (from client-specific socket to source address)
         TFTP_INFO("Creating ACK packet for block #%d", expected_block);
         TftpPacket ack_packet = TftpPacket::CreateAck(expected_block);
         TFTP_INFO("ACK packet created, attempting to send to data source");
@@ -524,10 +524,10 @@ void TftpServerImpl::HandleWriteRequest(
         }
         TFTP_INFO("Sent ACK for block #%d successfully", expected_block);
         
-        // 次のブロックの準備
+        // Prepare next block
         expected_block++;
         
-        // 最後のパケットかどうかをチェック（データサイズが512バイト未満、またはファイルサイズが目標サイズに達した場合）
+        // Check if it's the last packet (data size less than 512 bytes, or file size reached target size)
         bool size_based_completion = (block_data.size() < kMaxDataSize);
         bool expected_size_completion = has_expected_size && (file_data.size() >= expected_file_size);
         last_packet = size_based_completion || expected_size_completion;
@@ -538,7 +538,7 @@ void TftpServerImpl::HandleWriteRequest(
                  expected_size_completion ? "true" : "false", file_data.size(), expected_file_size,
                  last_packet ? "YES" : "NO");
         
-        // ファイルサイズの上限チェック
+        // File size limit check
         if (file_data.size() > max_transfer_size_) {
             TFTP_ERROR("File size exceeded limit: %zu > %zu", file_data.size(), max_transfer_size_);
             SendError(sock, client_addr, ErrorCode::kDiskFull, "File size too large");
@@ -549,7 +549,7 @@ void TftpServerImpl::HandleWriteRequest(
     
     TFTP_INFO("All data received: %zu bytes, %d blocks. Writing to file...", file_data.size(), expected_block - 1);
     
-    // ファイルの書き込み
+    // Write file
     TFTP_INFO("Calling write_callback_ for path: %s", filepath.c_str());
     bool success = write_callback_(filepath, file_data);
     if (!success) {
@@ -570,7 +570,7 @@ bool TftpServerImpl::SendPacket(
     const sockaddr_in& addr, const TftpPacket& packet) {
     std::vector<uint8_t> data = packet.Serialize();
     
-    // 送信パケットの16進ダンプ（ACKパケットの場合）
+    // Send packet hex dump (for ACK packets)
     if (packet.GetOpCode() == OpCode::kAcknowledge) {
         std::string hex_dump;
         for (size_t i = 0; i < data.size(); ++i) {
@@ -617,10 +617,10 @@ bool TftpServerImpl::ReceivePacket(
     TFTP_INFO("ReceivePacket: Calling select() with timeout %d.%06d", tv.tv_sec, tv.tv_usec);
     
 #ifdef _WIN32
-    // Windowsのselectはソケットの数値に関係なく、fdsetだけを見るので+1は不要
+    // Windows select does not depend on socket number, only fdset is checked, so +1 is not needed
     int result = select(0, &readfds, NULL, NULL, &tv);
 #else
-    // UNIXシステムではソケット番号+1が必要
+    // UNIX systems require socket number + 1
     int result = select(sock + 1, &readfds, NULL, NULL, &tv);
 #endif
     
@@ -676,14 +676,14 @@ void TftpServerImpl::SendError(
     TFTP_INFO("SendError called - code: %d, message: %s", static_cast<int>(code), message.c_str());
     TftpPacket error_packet = TftpPacket::CreateError(code, message);
     
-    // エラーパケットの送信を複数回試行
+    // Attempt to send error packet multiple times
     bool sent = false;
     for (int retry = 0; retry < kMaxRetries && !sent; retry++) {
         TFTP_INFO("Attempting to send error packet, retry: %d", retry);
         sent = SendPacket(sock, addr, error_packet);
         if (!sent) {
             TFTP_WARN("Error packet send failed, retry: %d", retry);
-            // 少し待ってから再試行
+            // Wait a bit before retrying
             std::this_thread::sleep_for(std::chrono::milliseconds(kRetryTimeoutMs / 2));
         }
     }
@@ -703,15 +703,15 @@ bool TftpServerImpl::DefaultReadHandler(const std::string& path, std::vector<uin
         return false;
     }
     
-    // ファイルサイズを取得
+    // Get file size
     file.seekg(0, std::ios::end);
     std::streamsize file_size = file.tellg();
     file.seekg(0, std::ios::beg);
     
-    // バッファを準備
+    // Prepare buffer
     data.resize(static_cast<size_t>(file_size));
     
-    // ファイルを読み込む
+    // Read file
     if (!file.read(reinterpret_cast<char*>(data.data()), file_size)) {
         TFTP_ERROR("File read error: %s", path.c_str());
         data.clear();

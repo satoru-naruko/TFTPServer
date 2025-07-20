@@ -7,31 +7,31 @@ namespace tftpserver {
 namespace util {
 
 bool IsPathSecure(const std::string& path, const std::string& root_dir) {
-    // パスのセキュリティチェック
-    // 1. 絶対パスが指定されていないか
-    // 2. 親ディレクトリへの参照（../）がないか
-    // 3. root_dirの外部にアクセスしようとしていないか
+    // Path security check
+    // 1. Check if absolute path is not specified
+    // 2. Check if there are no parent directory references (../)
+    // 3. Check if not trying to access outside root_dir
     
-    // 絶対パスのチェック
+    // Check for absolute path
 #ifdef _WIN32
     if (path.size() >= 2 && path[1] == ':') {
-        TFTP_ERROR("セキュリティ違反: 絶対パスが指定されています: %s", path.c_str());
+        TFTP_ERROR("Security violation: Absolute path specified: %s", path.c_str());
         return false;
     }
 #else
     if (!path.empty() && path[0] == '/') {
-        TFTP_ERROR("セキュリティ違反: 絶対パスが指定されています: %s", path.c_str());
+        TFTP_ERROR("Security violation: Absolute path specified: %s", path.c_str());
         return false;
     }
 #endif
 
-    // 正規化されたパスを取得
+    // Get normalized path
     std::string normalized_path = NormalizePath(root_dir + "/" + path);
     std::string normalized_root = NormalizePath(root_dir);
     
-    // ルートディレクトリ内に収まっているかチェック
+    // Check if within root directory
     if (normalized_path.find(normalized_root) != 0) {
-        TFTP_ERROR("セキュリティ違反: ルートディレクトリ外へのアクセス: %s", normalized_path.c_str());
+        TFTP_ERROR("Security violation: Access outside root directory: %s", normalized_path.c_str());
         return false;
     }
     
@@ -39,16 +39,16 @@ bool IsPathSecure(const std::string& path, const std::string& root_dir) {
 }
 
 std::string NormalizePath(const std::string& path) {
-    // パスを正規化する（.. や . を解決する）
+    // Normalize path (resolve .. and .)
     std::filesystem::path fs_path = path;
     
     try {
-        // 可能ならばパスを正規化
+        // Normalize path if possible
         if (std::filesystem::exists(fs_path)) {
             return std::filesystem::canonical(fs_path).string();
         }
         
-        // ファイルが存在しない場合は、親ディレクトリを正規化してからファイル名を追加
+        // If file doesn't exist, normalize parent directory and add filename
         auto parent = fs_path.parent_path();
         auto filename = fs_path.filename();
         
@@ -56,32 +56,32 @@ std::string NormalizePath(const std::string& path) {
             return (std::filesystem::canonical(parent) / filename).string();
         }
         
-        // 親ディレクトリも存在しない場合は、パスを構築
+        // If parent directory also doesn't exist, build the path
         std::string result = fs_path.string();
         
-        // ディレクトリ区切り文字を統一
+        // Unify directory separators
         std::replace(result.begin(), result.end(), '\\', '/');
         
-        // 連続するスラッシュを単一のスラッシュに置き換え
+        // Replace consecutive slashes with single slash
         size_t pos = 0;
         while ((pos = result.find("//", pos)) != std::string::npos) {
             result.replace(pos, 2, "/");
         }
         
-        // 末尾のスラッシュを削除
+        // Remove trailing slash
         if (!result.empty() && result.back() == '/') {
             result.pop_back();
         }
         
-        // 相対パスの正規化
+        // Normalize relative path
         if (!result.empty() && result[0] != '/' && result[0] != '\\') {
             result = std::filesystem::current_path().string() + "/" + result;
         }
         
         return result;
     } catch (const std::exception& e) {
-        TFTP_ERROR("パス正規化エラー: %s (%s)", path.c_str(), e.what());
-        return path;  // エラー時は元のパスを返す
+        TFTP_ERROR("Path normalization error: %s (%s)", path.c_str(), e.what());
+        return path;  // Return original path on error
     }
 }
 

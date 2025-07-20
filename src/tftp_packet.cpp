@@ -32,7 +32,7 @@ namespace {
             ++offset;  // Skip null terminator
         }
         
-        // パケット破損検出のためのログ追加
+        // Add log for packet corruption detection
         TFTP_INFO("read_string: start_offset=%zu, end_offset=%zu, string_length=%zu, result='%s'", 
                  start_offset, offset, result.length(), result.c_str());
         
@@ -158,7 +158,7 @@ std::vector<uint8_t> TftpPacket::Serialize() const {
             
             result.resize(total_size);
             
-            // opcode (ホストバイトオーダーからネットワークバイトオーダーに変換)
+            // opcode (convert from host byte order to network byte order)
             uint16_t opcode_network = htons(static_cast<uint16_t>(op_code_));
             std::memcpy(&result[0], &opcode_network, sizeof(uint16_t));
             
@@ -181,11 +181,11 @@ std::vector<uint8_t> TftpPacket::Serialize() const {
             // DATA packet: opcode + block# + data
             result.resize(4 + data_.size());
             
-            // opcode (ホストバイトオーダーからネットワークバイトオーダーに変換)
+            // opcode (convert from host byte order to network byte order)
             uint16_t opcode_network = htons(static_cast<uint16_t>(op_code_));
             std::memcpy(&result[0], &opcode_network, sizeof(uint16_t));
             
-            // block number (ホストバイトオーダーからネットワークバイトオーダーに変換)
+            // block number (convert from host byte order to network byte order)
             uint16_t block_number_network = htons(block_number_);
             std::memcpy(&result[2], &block_number_network, sizeof(uint16_t));
             
@@ -197,11 +197,11 @@ std::vector<uint8_t> TftpPacket::Serialize() const {
             // ACK packet: opcode + block#
             result.resize(4);
             
-            // opcode (ホストバイトオーダーからネットワークバイトオーダーに変換)
+            // opcode (convert from host byte order to network byte order)
             uint16_t opcode_network = htons(static_cast<uint16_t>(op_code_));
             std::memcpy(&result[0], &opcode_network, sizeof(uint16_t));
             
-            // block number (ホストバイトオーダーからネットワークバイトオーダーに変換)
+            // block number (convert from host byte order to network byte order)
             uint16_t block_number_network = htons(block_number_);
             std::memcpy(&result[2], &block_number_network, sizeof(uint16_t));
             break;
@@ -210,11 +210,11 @@ std::vector<uint8_t> TftpPacket::Serialize() const {
             // ERROR packet: opcode + errorcode + errmsg + 0
             result.resize(4 + error_message_.length() + 1);
             
-            // opcode (ホストバイトオーダーからネットワークバイトオーダーに変換)
+            // opcode (convert from host byte order to network byte order)
             uint16_t opcode_network = htons(static_cast<uint16_t>(op_code_));
             std::memcpy(&result[0], &opcode_network, sizeof(uint16_t));
             
-            // error code (ホストバイトオーダーからネットワークバイトオーダーに変換)
+            // error code (convert from host byte order to network byte order)
             uint16_t error_code_network = htons(static_cast<uint16_t>(error_code_));
             std::memcpy(&result[2], &error_code_network, sizeof(uint16_t));
             
@@ -233,7 +233,7 @@ std::vector<uint8_t> TftpPacket::Serialize() const {
             
             result.resize(total_size);
             
-            // opcode (ホストバイトオーダーからネットワークバイトオーダーに変換)
+            // opcode (convert from host byte order to network byte order)
             uint16_t opcode_network = htons(static_cast<uint16_t>(op_code_));
             std::memcpy(&result[0], &opcode_network, sizeof(uint16_t));
             
@@ -263,7 +263,7 @@ bool TftpPacket::Deserialize(const std::vector<uint8_t>& data) {
         return false;
     }
     
-    // パケット全体の詳細な16進ダンプ
+    // Detailed hex dump of the entire packet
     TFTP_INFO("Full packet analysis: size=%zu bytes", data.size());
     std::string hex_dump;
     for (size_t i = 0; i < data.size(); ++i) {
@@ -276,7 +276,7 @@ bool TftpPacket::Deserialize(const std::vector<uint8_t>& data) {
     }
     TFTP_INFO("Complete hex dump:\n%s", hex_dump.c_str());
     
-    // opcode (ネットワークバイトオーダーからホストバイトオーダーに変換)
+    // opcode (convert from network byte order to host byte order)
     uint16_t opcode_network;
     std::memcpy(&opcode_network, &data[0], sizeof(uint16_t));
     op_code_ = static_cast<OpCode>(ntohs(opcode_network));
@@ -305,12 +305,12 @@ bool TftpPacket::Deserialize(const std::vector<uint8_t>& data) {
             try {
                 mode_ = string_to_mode(mode_str);
             } catch (const TftpException&) {
-                // 未使用変数警告を解消するために、例外オブジェクトを捕捉するが使用しない
+                // Catch exception object to resolve unused variable warning, but don't use it
                 TFTP_ERROR("Invalid mode: %s", mode_str.c_str());
                 return false;
             }
             
-            // options (オプションがある場合)
+            // options (if present)
             options_.clear();
             TFTP_INFO("Checking for options, remaining bytes: %zu", data.size() - offset);
             while (offset < data.size()) {
@@ -333,7 +333,7 @@ bool TftpPacket::Deserialize(const std::vector<uint8_t>& data) {
                 return false;
             }
             
-            // block number（ネットワークバイトオーダーからホストバイトオーダーに変換）
+            // block number (convert from network byte order to host byte order)
             uint16_t block_number_network;
             std::memcpy(&block_number_network, &data[2], sizeof(uint16_t));
             block_number_ = ntohs(block_number_network);
@@ -348,7 +348,7 @@ bool TftpPacket::Deserialize(const std::vector<uint8_t>& data) {
                 return false;
             }
             
-            // block number（ネットワークバイトオーダーからホストバイトオーダーに変換）
+            // block number (convert from network byte order to host byte order)
             uint16_t block_number_network;
             std::memcpy(&block_number_network, &data[2], sizeof(uint16_t));
             block_number_ = ntohs(block_number_network);
@@ -360,7 +360,7 @@ bool TftpPacket::Deserialize(const std::vector<uint8_t>& data) {
                 return false;
             }
             
-            // error code（ネットワークバイトオーダーからホストバイトオーダーに変換）
+            // error code (convert from network byte order to host byte order)
             uint16_t error_code_network;
             std::memcpy(&error_code_network, &data[2], sizeof(uint16_t));
             error_code_ = static_cast<ErrorCode>(ntohs(error_code_network));
