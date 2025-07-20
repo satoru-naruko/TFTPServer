@@ -1,0 +1,105 @@
+/**
+ * @file tftp_common.h
+ * @brief TFTPプロトコルの共通定義
+ */
+
+#ifndef TFTP_COMMON_H_
+#define TFTP_COMMON_H_
+
+#include <string>
+#include <stdexcept>
+#include <ostream>
+
+// DLL エクスポート/インポート定義（Windows用）
+#if defined(_MSC_VER) && defined(TFTP_SHARED_LIBRARY)
+    #ifdef TFTP_BUILDING_LIBRARY
+        #define TFTP_EXPORT __declspec(dllexport)
+    #else
+        #define TFTP_EXPORT __declspec(dllimport)
+    #endif
+#else
+    #define TFTP_EXPORT
+#endif
+
+namespace tftpserver {
+
+// TFTPプロトコル定数
+constexpr uint16_t kDefaultTftpPort = 69;
+constexpr size_t kMaxPacketSize = 516;  // 512 + 4 (ヘッダー)
+constexpr size_t kMaxDataSize = 512;
+constexpr int kDefaultTimeout = 5;  // 秒
+
+// 操作コード
+enum class OpCode : uint16_t {
+    kReadRequest = 1,
+    kWriteRequest = 2,
+    kData = 3,
+    kAcknowledge = 4,
+    kError = 5,
+    kOACK = 6
+};
+
+// エラーコード
+enum class ErrorCode : uint16_t {
+    kNotDefined = 0,
+    kFileNotFound = 1,
+    kAccessViolation = 2,
+    kDiskFull = 3,
+    kIllegalOperation = 4,
+    kUnknownTransferId = 5,
+    kFileExists = 6,
+    kNoSuchUser = 7
+};
+
+// 転送モード
+enum class TransferMode {
+    kNetAscii,
+    kOctet,
+    kMail
+};
+
+// カスタム例外クラス
+class TFTP_EXPORT TftpException : public std::runtime_error {
+public:
+    explicit TftpException(const std::string& message) : std::runtime_error(message) {}
+};
+
+// Stream output operators for Google Test
+inline std::ostream& operator<<(std::ostream& os, OpCode op_code) {
+    switch (op_code) {
+        case OpCode::kReadRequest: return os << "ReadRequest";
+        case OpCode::kWriteRequest: return os << "WriteRequest";
+        case OpCode::kData: return os << "Data";
+        case OpCode::kAcknowledge: return os << "Acknowledge";
+        case OpCode::kError: return os << "Error";
+        case OpCode::kOACK: return os << "OACK";
+        default: return os << "Unknown(" << static_cast<int>(op_code) << ")";
+    }
+}
+
+inline std::ostream& operator<<(std::ostream& os, ErrorCode error_code) {
+    switch (error_code) {
+        case ErrorCode::kNotDefined: return os << "NotDefined";
+        case ErrorCode::kFileNotFound: return os << "FileNotFound";
+        case ErrorCode::kAccessViolation: return os << "AccessViolation";
+        case ErrorCode::kDiskFull: return os << "DiskFull";
+        case ErrorCode::kIllegalOperation: return os << "IllegalOperation";
+        case ErrorCode::kUnknownTransferId: return os << "UnknownTransferId";
+        case ErrorCode::kFileExists: return os << "FileExists";
+        case ErrorCode::kNoSuchUser: return os << "NoSuchUser";
+        default: return os << "Unknown(" << static_cast<int>(error_code) << ")";
+    }
+}
+
+// Equality comparison operators for Google Test
+inline bool operator==(OpCode lhs, OpCode rhs) {
+    return static_cast<int>(lhs) == static_cast<int>(rhs);
+}
+
+inline bool operator==(ErrorCode lhs, ErrorCode rhs) {
+    return static_cast<int>(lhs) == static_cast<int>(rhs);
+}
+
+} // namespace tftpserver
+
+#endif // TFTP_COMMON_H_ 

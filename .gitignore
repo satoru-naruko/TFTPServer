@@ -1,0 +1,232 @@
+# TFTPServer Project .gitignore
+
+# =============================================================================
+# Build outputs and generated files
+# =============================================================================
+
+# CMake build directory
+build/
+Build/
+builds/
+Builds/
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+CTestTestfile.cmake
+Makefile
+*.cmake
+!CMakeLists.txt
+!cmake/*.cmake
+
+# =============================================================================
+# C++ compiled outputs
+# =============================================================================
+
+# Object files
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+
+# =============================================================================
+# Visual Studio / MSBuild
+# =============================================================================
+
+# Visual Studio cache/options directory
+.vs/
+
+# MSBuild Binary and structured log
+*.binlog
+
+# Visual Studio solution files (keep template ones)
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.vcxproj.vspscc
+*.vssscc
+
+# Visual Studio database files
+*.VC.db
+*.VC.VC.opendb
+
+# Visual Studio IntelliSense files
+*.ncb
+*.opensdf
+*.sdf
+*.cachefile
+*.VC.db
+*.VC.VC.opendb
+
+# Visual Studio profiler
+*.psess
+*.vsp
+*.vspx
+
+# TeamCity is a build add-in
+_TeamCity*
+
+# DotCover is a Code Coverage Tool
+*.dotCover
+
+# =============================================================================
+# IDE and Editor files
+# =============================================================================
+
+# Visual Studio Code
+.vscode/
+*.code-workspace
+
+# Cursor IDE
+.cursor/
+
+# CLion
+.idea/
+cmake-build-*/
+
+# QtCreator
+CMakeLists.txt.user*
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+
+# =============================================================================
+# OS generated files
+# =============================================================================
+
+# Windows
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Linux
+*~
+
+# =============================================================================
+# Test outputs and temporary files
+# =============================================================================
+
+# Test result files
+test_files/
+test_results/
+*.xml
+*.log
+
+# Coverage reports
+coverage/
+*.gcov
+*.gcda
+*.gcno
+
+# CTest
+Testing/
+
+# =============================================================================
+# Documentation generation
+# =============================================================================
+
+# Doxygen output
+docs/html/
+docs/latex/
+Doxyfile.bak
+
+# =============================================================================
+# Package managers and dependencies
+# =============================================================================
+
+# vcpkg
+vcpkg_installed/
+
+# Conan
+conandata.yml
+conanfile.txt
+conanbuildinfo.*
+conan.lock
+
+# =============================================================================
+# Temporary and backup files
+# =============================================================================
+
+# Backup files
+*.bak
+*.backup
+*.tmp
+*.temp
+
+# Core dumps
+core
+core.*
+
+# =============================================================================
+# Custom project specific files
+# =============================================================================
+
+# Ignore any local configuration files
+local_config.*
+*.local
+
+# Ignore performance test outputs
+*.prof
+*.perf
+
+# Ignore any generated certificates or keys
+*.pem
+*.key
+*.crt
+
+# =============================================================================
+# Keep these files/directories
+# =============================================================================
+
+# Keep empty directories with .gitkeep
+!**/.gitkeep
+
+# Keep cmake configuration files
+!cmake/
+!cmake/*.cmake
+
+# Keep example files
+!examples/
+
+# Keep documentation
+!docs/
+!README.md
+!*.md 

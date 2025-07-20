@@ -1,0 +1,11 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Microsoft/vcpkg/master/scripts/vcpkg.schema.json",
+  "name": "tftpserver",
+  "version": "1.0.0",
+  "description": "A high-performance TFTP server implementation in C++17",
+  "license": "MIT",
+  "dependencies": [
+    "gtest"
+  ],
+  "builtin-baseline": "7476f0d4e77d3333fbb249657df8251c28c4faae"
+} 
