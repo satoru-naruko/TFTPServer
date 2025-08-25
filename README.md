@@ -32,6 +32,109 @@ cmake --build . --config Debug
 ctest -C Debug --output-on-failure
 ```
 
+## Testing
+
+The TFTP Server Library includes comprehensive testing with multiple test suites to ensure robust functionality, performance, and security.
+
+### Test Suites Overview
+
+#### 1. Unit Tests (`TftpServerTest`)
+- **File**: `tests/tftp_server_test.cpp`
+- **Purpose**: Core server functionality testing
+- **Tests**: File upload/download, large file transfers, async operations, error handling
+
+#### 2. Curl Integration Tests (`CurlTftpTest`)
+- **File**: `tests/tftp_curl_integration_test.cpp`
+- **Purpose**: Real-world TFTP client testing using curl
+- **Tests**: 14 comprehensive integration tests covering:
+  - Small/medium/large file transfers
+  - Binary and text file handling
+  - Empty file transfers
+  - Error conditions (file not found, invalid filenames)
+  - Concurrent operations
+  - Transfer mode validation
+
+#### 3. Performance Tests (`CurlTftpPerformanceTest`)
+- **File**: `tests/tftp_curl_performance_test.cpp`
+- **Purpose**: Performance benchmarking and optimization validation
+- **Tests**: 5 performance-focused tests including:
+  - Throughput measurement by file size (1KB to 5MB)
+  - Binary vs text performance comparison
+  - Transfer consistency analysis
+  - Timeout handling validation
+
+#### 4. Security Tests (`CurlTftpSecurityTest`)
+- **File**: `tests/tftp_curl_security_test.cpp` 
+- **Purpose**: Security validation and attack prevention
+- **Tests**: 8 security-focused tests covering:
+  - Directory traversal prevention
+  - Filename validation and sanitization
+  - Protocol abuse detection
+  - Resource exhaustion protection
+  - Concurrent connection limits
+
+### Running Tests
+
+#### Prerequisites
+- **curl**: Version 7.x+ with TFTP support
+- **GoogleTest**: Installed via vcpkg
+- **CMake**: 3.20 or higher
+
+#### Verify curl TFTP Support
+```cmd
+curl --version
+# Should show "tftp" in the Protocols list
+```
+
+#### Run All Tests
+```cmd
+cd build
+ctest -C Debug --output-on-failure
+```
+
+#### Run Specific Test Suites
+```cmd
+# Integration tests only
+ctest -R CurlTftpIntegrationTests -V
+
+# Performance tests only
+ctest -R CurlTftpPerformanceTests -V
+
+# Security tests only
+ctest -R CurlTftpSecurityTests -V
+
+# All curl-based tests
+ctest -R "CurlTftp.*" -V
+```
+
+#### Run Individual Tests
+```cmd
+# Run single test
+./DEBUG/bin/tftpserver_tests.exe --gtest_filter="CurlTftpTest.SmallTextFileDownload"
+
+# List all available tests
+./DEBUG/bin/tftpserver_tests.exe --gtest_list_tests
+```
+
+### Test Coverage
+
+The comprehensive test suite provides:
+- **37 total tests** across 4 test suites
+- **80%+ code coverage** minimum requirement
+- **Functional testing**: Upload/download operations, error handling
+- **Performance testing**: Throughput measurement, consistency analysis
+- **Security testing**: Attack prevention, input validation
+- **Integration testing**: Real-world curl client scenarios
+
+### Test Configuration
+
+- **Port Range**: Tests use ports 6970-6972 (avoiding conflicts)
+- **Timeouts**: Extended timeouts for large file transfers (up to 15 minutes)
+- **Test Data**: Deterministic test patterns for reproducible results
+- **Cleanup**: Automatic cleanup of temporary test files
+
+For detailed testing documentation, see [CURL_TFTP_TESTS.md](CURL_TFTP_TESTS.md).
+
 ## Build Instructions
 
 ### Prerequisites
