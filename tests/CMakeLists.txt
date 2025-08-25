@@ -3,9 +3,22 @@
 # Find GoogleTest package
 find_package(GTest REQUIRED)
 
+# Check for curl availability for integration tests
+find_program(CURL_EXECUTABLE curl)
+if(CURL_EXECUTABLE)
+    message(STATUS "Found curl: ${CURL_EXECUTABLE}")
+    message(STATUS "Curl integration tests will be enabled")
+else()
+    message(WARNING "curl not found - curl integration tests may fail")
+    message(WARNING "Please install curl to run TFTP integration tests")
+endif()
+
 # Collect test source files
 set(TEST_SOURCES
     tftp_server_test.cpp
+    tftp_curl_integration_test.cpp
+    tftp_curl_performance_test.cpp
+    tftp_curl_security_test.cpp
 )
 
 # Create test executable
@@ -79,6 +92,44 @@ gtest_discover_tests(tftpserver_tests
     PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     DISCOVERY_TIMEOUT 60
     XML_OUTPUT_DIR "${CMAKE_BINARY_DIR}/test_results"
+)
+
+# Add specific curl integration test suites
+add_test(
+    NAME CurlTftpIntegrationTests
+    COMMAND tftpserver_tests --gtest_filter="CurlTftpTest.*"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+)
+
+add_test(
+    NAME CurlTftpPerformanceTests
+    COMMAND tftpserver_tests --gtest_filter="CurlTftpPerformanceTest.*"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+)
+
+add_test(
+    NAME CurlTftpSecurityTests
+    COMMAND tftpserver_tests --gtest_filter="CurlTftpSecurityTest.*"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+)
+
+# Set properties for curl integration tests
+set_tests_properties(CurlTftpIntegrationTests PROPERTIES
+    ENVIRONMENT "PATH=${CMAKE_BINARY_DIR}/bin;$ENV{PATH}"
+    TIMEOUT 600  # Extended timeout for curl integration tests
+    LABELS "integration;curl;tftp"
+)
+
+set_tests_properties(CurlTftpPerformanceTests PROPERTIES
+    ENVIRONMENT "PATH=${CMAKE_BINARY_DIR}/bin;$ENV{PATH}"
+    TIMEOUT 900  # Extended timeout for performance tests
+    LABELS "performance;curl;tftp;benchmark"
+)
+
+set_tests_properties(CurlTftpSecurityTests PROPERTIES
+    ENVIRONMENT "PATH=${CMAKE_BINARY_DIR}/bin;$ENV{PATH}"
+    TIMEOUT 300  # Timeout for security tests
+    LABELS "security;curl;tftp"
 )
 
 # Manually add tests (fallback)
