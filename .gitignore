@@ -98,6 +98,9 @@ _TeamCity*
 # =============================================================================
 
 # Visual Studio Code
+
+# Claude AI Assistant
+.claude/settings.local.json
 .vscode/
 *.code-workspace
 

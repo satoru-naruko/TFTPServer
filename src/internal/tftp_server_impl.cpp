@@ -527,21 +527,29 @@ void TftpServerImpl::HandleWriteRequest(
         // Prepare next block
         expected_block++;
         
-        // Check if it's the last packet (data size less than 512 bytes, or file size reached target size)
+        // Check if it's the last packet
+        // RFC 1350: Transfer ends when data packet size < 512 bytes
+        // When using tsize option, still need to wait for termination packet if file size is multiple of 512
         bool size_based_completion = (block_data.size() < kMaxDataSize);
-        bool expected_size_completion = has_expected_size && (file_data.size() >= expected_file_size);
-        last_packet = size_based_completion || expected_size_completion;
+        last_packet = size_based_completion;
         
-        TFTP_INFO("Block #%d completion check: size_based=%s (%zu<%zu), expected_size=%s (%zu>=%zu), is_last=%s", 
+        TFTP_INFO("Block #%d completion check: size_based=%s (%zu<%zu), is_last=%s", 
                  expected_block-1, 
                  size_based_completion ? "true" : "false", block_data.size(), kMaxDataSize,
-                 expected_size_completion ? "true" : "false", file_data.size(), expected_file_size,
                  last_packet ? "YES" : "NO");
         
         // File size limit check
         if (file_data.size() > max_transfer_size_) {
             TFTP_ERROR("File size exceeded limit: %zu > %zu", file_data.size(), max_transfer_size_);
             SendError(sock, client_addr, ErrorCode::kDiskFull, "File size too large");
+            return;
+        }
+        
+        // Additional safety check: if using tsize option and received data exceeds expected size significantly
+        if (has_expected_size && file_data.size() > expected_file_size + kMaxDataSize) {
+            TFTP_ERROR("Received data significantly exceeds tsize: %zu > %zu + %zu", 
+                      file_data.size(), expected_file_size, kMaxDataSize);
+            SendError(sock, client_addr, ErrorCode::kDiskFull, "File size exceeds tsize");
             return;
         }
         
