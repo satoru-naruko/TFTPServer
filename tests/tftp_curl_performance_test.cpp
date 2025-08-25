@@ -412,7 +412,7 @@ TEST_F(CurlTftpPerformanceTest, RepeatedTransferConsistency) {
 TEST_F(CurlTftpPerformanceTest, TimeoutHandling) {
     PERF_LOG("Testing timeout handling with aggressive timeout settings");
     
-    // Test with very short timeout for small file (should succeed)
+    // Test with reasonable timeout for small file (should succeed)
     std::vector<std::string> args_success = {
         "--tftp-blksize", "512",
         "--connect-timeout", "2",
@@ -426,19 +426,20 @@ TEST_F(CurlTftpPerformanceTest, TimeoutHandling) {
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
     
-    PERF_LOG("Short timeout test: exit_code=%d, duration=%lld ms", 
+    PERF_LOG("Reasonable timeout test: exit_code=%d, duration=%lld ms", 
             result_success.first, duration.count());
     
-    EXPECT_EQ(result_success.first, 0) << "Short timeout test should succeed for small file";
+    EXPECT_EQ(result_success.first, 0) << "Reasonable timeout test should succeed for small file";
     EXPECT_LT(duration.count(), 5000) << "Should complete well within timeout";
     
-    // Test with impossibly short timeout for large file (should timeout)
+    // Test with extremely aggressive timeout for large file (should timeout)
+    // Use 5MB file with 300ms timeout - this should be impossible to complete
     std::vector<std::string> args_timeout = {
         "--tftp-blksize", "512",
         "--connect-timeout", "1",
-        "--max-time", "2",
+        "--max-time", "0.3",  // 300ms - impossibly short for 5MB file
         "-o", std::string(kPerfTestRootDir) + "/timeout_test_fail.bin",
-        "tftp://127.0.0.1:" + std::to_string(kPerfTestPort) + "/perf_1mb.bin"
+        "tftp://127.0.0.1:" + std::to_string(kPerfTestPort) + "/perf_5mb.bin"
     };
     
     start_time = std::chrono::high_resolution_clock::now();
@@ -451,7 +452,7 @@ TEST_F(CurlTftpPerformanceTest, TimeoutHandling) {
     
     // Should timeout (non-zero exit code) and complete quickly due to timeout
     EXPECT_NE(result_timeout.first, 0) << "Aggressive timeout should cause failure";
-    EXPECT_LT(duration.count(), 4000) << "Should timeout quickly";
+    EXPECT_LT(duration.count(), 1000) << "Should timeout very quickly (under 1 second)";
 }
 
 // Note: main() function is provided by the main test file (tftp_server_test.cpp)
