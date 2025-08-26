@@ -6,7 +6,10 @@
       "Bash(cmake:*)",
       "Bash(.DEBUGbintftpserver_tests.exe --gtest_list_tests)",
       "Bash(./DEBUG/bin/tftpserver_tests.exe:*)",
-      "Bash(ctest:*)"
+      "Bash(ctest:*)",
+      "WebSearch",
+      "WebFetch(domain:datatracker.ietf.org)",
+      "WebFetch(domain:curl.se)"
     ],
     "deny": [],
     "ask": []

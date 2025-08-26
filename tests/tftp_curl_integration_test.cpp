@@ -798,4 +798,136 @@ TEST_F(CurlTftpTest, SpecialFilenameHandling) {
     LOG_INFO("Special filename handling test completed successfully");
 }
 
+// ==== PROTOCOL REGRESSION TESTS ====
+
+TEST_F(CurlTftpTest, OddSizeBinaryFileTransfer) {
+    /**
+     * @brief Test for non-multiple-of-512 byte files (regression test)
+     * 
+     * This test validates the recent fix for TFTP protocol handling of files
+     * that are NOT exact multiples of 512 bytes. The bug was related to 
+     * incorrect termination packet handling for files with sizes that are 
+     * exact multiples of 512 bytes.
+     * 
+     * Test case: 1026-byte binary file
+     * - Block #1: 512 bytes
+     * - Block #2: 512 bytes  
+     * - Block #3: 2 bytes (final block, naturally terminates transfer)
+     * 
+     * This ensures that files with odd sizes still work correctly after
+     * the protocol fix for multiple-of-512 files.
+     */
+    
+    const size_t kOddBinarySize = 1026;  // 512 + 512 + 2 bytes
+    const std::string kOddBinaryFileName = "odd_size_binary.bin";
+    
+    // Create the 1026-byte binary test file with deterministic pattern
+    std::string original_file = std::string(kCurlTestRootDir) + "/" + kOddBinaryFileName;
+    std::ofstream file(original_file, std::ios::binary);
+    ASSERT_TRUE(file.good()) << "Failed to create 1026-byte test file: " << original_file;
+    
+    // Create deterministic binary pattern for verification
+    std::vector<uint8_t> pattern(kOddBinarySize);
+    for (size_t i = 0; i < kOddBinarySize; ++i) {
+        // Use a different pattern than other binary files for uniqueness
+        pattern[i] = static_cast<uint8_t>((i * 73 + 41) % 256);
+    }
+    
+    file.write(reinterpret_cast<const char*>(pattern.data()), static_cast<std::streamsize>(kOddBinarySize));
+    file.close();
+    
+    // Verify test file was created correctly
+    ASSERT_TRUE(std::filesystem::exists(original_file)) 
+        << "1026-byte test file was not created";
+    ASSERT_EQ(GetFileSize(original_file), kOddBinarySize) 
+        << "Test file size is incorrect";
+    
+    LOG_INFO("Created 1026-byte binary test file: %s", kOddBinaryFileName.c_str());
+    
+    // ==== TEST UPLOAD FUNCTIONALITY ====
+    
+    // Upload the 1026-byte file using curl TFTP
+    std::string uploaded_filename = "uploaded_odd_size_binary.bin";
+    ASSERT_TRUE(CurlUploadFile(original_file, uploaded_filename))
+        << "Failed to upload 1026-byte binary file via curl TFTP";
+    
+    // Verify uploaded file exists on server
+    std::string server_uploaded_file = std::string(kCurlTestRootDir) + "/" + uploaded_filename;
+    
+    // Wait for file to be written (handle async operations)
+    bool upload_appeared = false;
+    for (int i = 0; i < 50; ++i) {  // Wait up to 5 seconds
+        if (std::filesystem::exists(server_uploaded_file)) {
+            upload_appeared = true;
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    
+    ASSERT_TRUE(upload_appeared) 
+        << "Uploaded 1026-byte file not found on server: " << server_uploaded_file;
+    
+    // Verify uploaded file size
+    ASSERT_EQ(GetFileSize(server_uploaded_file), kOddBinarySize)
+        << "Uploaded file size does not match original (1026 bytes)";
+    
+    // Verify uploaded file content integrity
+    ASSERT_TRUE(CompareFiles(original_file, server_uploaded_file))
+        << "Uploaded 1026-byte file content does not match original";
+    
+    LOG_INFO("1026-byte binary file upload completed successfully");
+    
+    // ==== TEST DOWNLOAD FUNCTIONALITY ====
+    
+    // Download the same 1026-byte file
+    std::string downloaded_file = std::string(kCurlTestRootDir) + "/downloaded_odd_size_binary.bin";
+    std::filesystem::remove(downloaded_file);  // Ensure clean state
+    
+    ASSERT_TRUE(CurlDownloadFile(kOddBinaryFileName, downloaded_file))
+        << "Failed to download 1026-byte binary file via curl TFTP";
+    
+    // Verify downloaded file exists
+    ASSERT_TRUE(std::filesystem::exists(downloaded_file))
+        << "Downloaded 1026-byte file does not exist";
+    
+    // Verify downloaded file size
+    ASSERT_EQ(GetFileSize(downloaded_file), kOddBinarySize)
+        << "Downloaded file size does not match original (1026 bytes)";
+    
+    // Verify downloaded file content integrity
+    ASSERT_TRUE(CompareFiles(original_file, downloaded_file))
+        << "Downloaded 1026-byte file content does not match original";
+    
+    LOG_INFO("1026-byte binary file download completed successfully");
+    
+    // ==== ADDITIONAL VERIFICATION ====
+    
+    // Cross-verify: uploaded file should match downloaded file
+    ASSERT_TRUE(CompareFiles(server_uploaded_file, downloaded_file))
+        << "Uploaded and downloaded files should be identical";
+    
+    // Verify exact byte pattern integrity at critical boundaries
+    std::ifstream verify_file(downloaded_file, std::ios::binary);
+    ASSERT_TRUE(verify_file.good()) << "Cannot open downloaded file for verification";
+    
+    std::vector<uint8_t> downloaded_data(kOddBinarySize);
+    verify_file.read(reinterpret_cast<char*>(downloaded_data.data()), kOddBinarySize);
+    verify_file.close();
+    
+    // Verify first block (bytes 0-511)
+    bool first_block_ok = std::equal(pattern.begin(), pattern.begin() + 512, downloaded_data.begin());
+    ASSERT_TRUE(first_block_ok) << "First 512-byte block corrupted";
+    
+    // Verify second block (bytes 512-1023)
+    bool second_block_ok = std::equal(pattern.begin() + 512, pattern.begin() + 1024, downloaded_data.begin() + 512);
+    ASSERT_TRUE(second_block_ok) << "Second 512-byte block corrupted";
+    
+    // Verify final 2 bytes (bytes 1024-1025)
+    bool final_bytes_ok = std::equal(pattern.begin() + 1024, pattern.end(), downloaded_data.begin() + 1024);
+    ASSERT_TRUE(final_bytes_ok) << "Final 2 bytes corrupted";
+    
+    LOG_INFO("Odd size binary file transfer test completed successfully");
+    LOG_INFO("Verified 1026-byte file with pattern: Block1(512) + Block2(512) + Block3(2)");
+}
+
 // Note: main() function is provided by the main test file (tftp_server_test.cpp)
