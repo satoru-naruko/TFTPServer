@@ -130,11 +130,26 @@ protected:
         file.close();
     }
 
+    // URL encoding function for TFTP URLs
+    std::string UrlEncode(const std::string& value) {
+        std::string result;
+        for (char c : value) {
+            if (std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') {
+                result += c;
+            } else {
+                char buffer[4];
+                snprintf(buffer, sizeof(buffer), "%%%02X", static_cast<unsigned char>(c));
+                result += buffer;
+            }
+        }
+        return result;
+    }
+
     std::pair<int, std::string> ExecuteCurlCommand(const std::vector<std::string>& args) {
         std::string command = "C:\\Windows\\System32\\curl.exe";
         for (const auto& arg : args) {
             // Handle arguments that might contain spaces or special characters
-            if (arg.find(' ') != std::string::npos || arg.find('&') != std::string::npos) {
+            if (arg.find_first_of(" |><&;`$*?\t\n\r") != std::string::npos) {
                 command += " \"" + arg + "\"";
             } else {
                 command += " " + arg;
@@ -181,7 +196,7 @@ protected:
             "-f",  // Fail on HTTP errors
             "-s",  // Silent mode
             "-o", local_file,
-            "tftp://127.0.0.1:" + std::to_string(kSecTestPort) + "/" + remote_file
+            "tftp://127.0.0.1:" + std::to_string(kSecTestPort) + "/" + UrlEncode(remote_file)
         };
         
         auto result = ExecuteCurlCommand(args);
@@ -208,7 +223,7 @@ protected:
             "--connect-timeout", "5",
             "--max-time", "10",
             "-o", local_file,
-            "tftp://127.0.0.1:" + std::to_string(kSecTestPort) + "/" + remote_file
+            "tftp://127.0.0.1:" + std::to_string(kSecTestPort) + "/" + UrlEncode(remote_file)
         };
         
         auto result = ExecuteCurlCommand(args);
@@ -241,7 +256,7 @@ protected:
             "-f",  // Fail on HTTP errors
             "-s",  // Silent mode
             "-T", local_file,
-            "tftp://127.0.0.1:" + std::to_string(kSecTestPort) + "/" + remote_file
+            "tftp://127.0.0.1:" + std::to_string(kSecTestPort) + "/" + UrlEncode(remote_file)
         };
         
         auto result = ExecuteCurlCommand(args);
