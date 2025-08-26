@@ -37,7 +37,7 @@ echo.
 :: Set CMake command aliases
 doskey cmake_configure=cd build ^& cmake ..
 doskey cmake_build=cd build ^& cmake --build . --config Debug
-doskey cmake_test=cd build ^& ctest --output-on-failure
+doskey cmake_test=cd build ^& ctest -C Debug --output-on-failure
 
 echo Development environment setup complete!
 echo Run this script every time you open a new terminal, or execute 'setup_dev_env.cmd'. 
