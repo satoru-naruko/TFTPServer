@@ -9,7 +9,16 @@
       "Bash(ctest:*)",
       "WebSearch",
       "WebFetch(domain:datatracker.ietf.org)",
-      "WebFetch(domain:curl.se)"
+      "WebFetch(domain:curl.se)",
+      "Bash(where tftp.exe)",
+      "Bash(where atftp.exe)",
+      "Bash(powershell:*)",
+      "Bash(grep:*)",
+      "Bash(./DEBUG/bin/server_example.exe:*)",
+      "Bash(taskkill:*)",
+      "Bash(timeout 10 ctest -C Debug --output-on-failure -R \"TftpServerTest.FileDownload\" -V)",
+      "Bash(cat:*)",
+      "Bash(setup_dev_env.cmd)"
     ],
     "deny": [],
     "ask": []

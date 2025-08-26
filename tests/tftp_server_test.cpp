@@ -69,7 +69,8 @@ inline void CloseSocket(int sock) {
 // Test constants
 constexpr uint16_t kTestPort = 6969;
 constexpr const char* kTestRootDir = "./test_files";
-constexpr const char* kTestFile = "test_upload.txt";
+
+constexpr const char* kTestFile = "upload_test.txt";
 
 // Expected line endings per OS
 #ifdef _WIN32
@@ -751,14 +752,8 @@ TEST_F(TftpServerTest, LargeFileTransfer) {
 
 // Async upload and download test
 TEST_F(TftpServerTest, AsyncFileTransfer) {
-    // Start server
-    TftpServer server(kTestRootDir, kTestPort);
-    ASSERT_TRUE(server.Start());
-    
-    // Wait for server to fully start
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-
-    // Prepare test files
+    // Create test files in the same directory as other working tests (kTestRootDir)
+    // This ensures consistency with SetUp() and other tests
     std::vector<std::string> test_files;
     for (int i = 0; i < 5; i++) {
         std::string filename = "async_test_" + std::to_string(i) + ".txt";
@@ -766,12 +761,43 @@ TEST_F(TftpServerTest, AsyncFileTransfer) {
         content += "With multiple lines\n";
         content += "For testing purpose\n";
         
-        std::ofstream file(std::string(kTestRootDir) + "/" + filename);
+        // Use kTestRootDir like other working tests
+        std::string full_path = std::string(kTestRootDir) + "/" + filename;
+        std::ofstream file(full_path);
+        if (!file.is_open()) {
+            LOG_ERROR("Failed to create file: %s", full_path.c_str());
+            ASSERT_TRUE(false) << "Failed to create test file: " << full_path;
+        }
         file << content;
+        file.flush();
         file.close();
+        
+        // Verify file was created
+        if (!std::filesystem::exists(full_path)) {
+            LOG_ERROR("File was not created: %s", full_path.c_str());
+            ASSERT_TRUE(false) << "Test file was not created: " << full_path;
+        }
         
         test_files.push_back(filename);
     }
+    
+    // Verify all files were created successfully
+    for (const auto& filename : test_files) {
+        std::string full_path = std::string(kTestRootDir) + "/" + filename;
+        if (!std::filesystem::exists(full_path)) {
+            ASSERT_TRUE(false) << "Test file was not created: " << full_path;
+        }
+    }
+    
+    // Give time for filesystem to ensure files are committed to disk
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    
+    // Start server with same directory where files were created (like other tests do)
+    TftpServer server(kTestRootDir, kTestPort);
+    ASSERT_TRUE(server.Start());
+    
+    // Wait for server to fully start
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
     
     // Execute parallel downloads
     std::vector<std::thread> download_threads;
