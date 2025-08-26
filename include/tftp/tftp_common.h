@@ -9,6 +9,7 @@
 #include <string>
 #include <stdexcept>
 #include <ostream>
+#include <cstdint>
 
 // DLL export/import definitions (for Windows)
 #if defined(_MSC_VER) && defined(TFTP_SHARED_LIBRARY)
@@ -28,6 +29,15 @@ constexpr uint16_t kDefaultTftpPort = 69;
 constexpr size_t kMaxPacketSize = 516;  // 512 + 4 (header)
 constexpr size_t kMaxDataSize = 512;
 constexpr int kDefaultTimeout = 5;  // seconds
+
+// Security limits for buffer overflow protection
+constexpr size_t kMaxFilenameLength = 255;     // Maximum filename length
+constexpr size_t kMaxOptionNameLength = 64;    // Maximum option name length  
+constexpr size_t kMaxOptionValueLength = 64;   // Maximum option value length
+constexpr size_t kMaxErrorMessageLength = 255; // Maximum error message length
+constexpr size_t kMaxStringLength = 255;       // Maximum general string length
+constexpr size_t kMaxOptionsCount = 16;        // Maximum number of options per packet
+constexpr size_t kMinPacketSize = 4;           // Minimum valid packet size (opcode + data)
 
 // Operation codes
 enum class OpCode : uint16_t {

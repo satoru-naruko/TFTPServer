@@ -20,6 +20,7 @@ set(TEST_SOURCES
     tftp_curl_performance_test.cpp
     tftp_curl_security_test.cpp
     tftp_server_security_test.cpp
+    tftp_packet_security_test.cpp
 )
 
 # Create test executable
@@ -120,6 +121,12 @@ add_test(
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
 )
 
+add_test(
+    NAME TftpPacketSecurityTests
+    COMMAND tftpserver_tests --gtest_filter="TftpPacketSecurityTest.*"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+)
+
 # Set properties for curl integration tests
 set_tests_properties(CurlTftpIntegrationTests PROPERTIES
     ENVIRONMENT "PATH=${CMAKE_BINARY_DIR}/bin;$ENV{PATH}"
@@ -143,6 +150,12 @@ set_tests_properties(TftpServerSecurityTests PROPERTIES
     ENVIRONMENT "PATH=${CMAKE_BINARY_DIR}/bin;$ENV{PATH}"
     TIMEOUT 300  # Timeout for comprehensive security tests
     LABELS "security;tftp;comprehensive"
+)
+
+set_tests_properties(TftpPacketSecurityTests PROPERTIES
+    ENVIRONMENT "PATH=${CMAKE_BINARY_DIR}/bin;$ENV{PATH}"
+    TIMEOUT 180  # Timeout for packet deserialization security tests
+    LABELS "security;tftp;packet;deserialization"
 )
 
 # Manually add tests (fallback)

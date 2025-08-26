@@ -21,20 +21,50 @@ namespace {
         dest[offset++] = 0;
     }
 
-    // Read null-terminated string
-    std::string read_string(const std::vector<uint8_t>& data, size_t& offset) {
+    // Read null-terminated string with comprehensive bounds checking
+    std::string read_string(const std::vector<uint8_t>& data, size_t& offset, size_t max_length = kMaxStringLength) {
         std::string result;
         size_t start_offset = offset;
-        while (offset < data.size() && data[offset] != 0) {
-            result += static_cast<char>(data[offset++]);
-        }
-        if (offset < data.size()) {
-            ++offset;  // Skip null terminator
+        
+        // Validate offset is within bounds
+        if (offset >= data.size()) {
+            TFTP_ERROR("read_string: offset %zu exceeds data size %zu", offset, data.size());
+            return result;  // Return empty string for invalid offset
         }
         
-        // Add log for packet corruption detection
-        TFTP_INFO("read_string: start_offset=%zu, end_offset=%zu, string_length=%zu, result='%s'", 
-                 start_offset, offset, result.length(), result.c_str());
+        // Read characters with multiple safety checks
+        size_t chars_read = 0;
+        while (offset < data.size() && data[offset] != 0 && chars_read < max_length) {
+            result += static_cast<char>(data[offset++]);
+            chars_read++;
+        }
+        
+        // Validate string termination
+        if (offset >= data.size()) {
+            TFTP_ERROR("read_string: reached end of data without null terminator at offset %zu", offset);
+            return std::string();  // Return empty string for unterminated string
+        }
+        
+        // Check for maximum length exceeded
+        if (chars_read >= max_length && data[offset] != 0) {
+            TFTP_ERROR("read_string: string exceeds maximum length %zu at offset %zu", max_length, start_offset);
+            return std::string();  // Return empty string for oversized string
+        }
+        
+        // Skip null terminator safely
+        if (offset < data.size() && data[offset] == 0) {
+            ++offset;
+        }
+        
+        // Validate final result
+        if (result.length() > max_length) {
+            TFTP_ERROR("read_string: final string length %zu exceeds maximum %zu", result.length(), max_length);
+            return std::string();  // Return empty string for invalid result
+        }
+        
+        // Log successful parsing with security info
+        TFTP_INFO("read_string: start_offset=%zu, end_offset=%zu, string_length=%zu, max_allowed=%zu, result='%s'", 
+                 start_offset, offset, result.length(), max_length, result.c_str());
         
         return result;
     }
@@ -258,8 +288,19 @@ std::vector<uint8_t> TftpPacket::Serialize() const {
 // NOTE: TFTP uses network byte order (big-endian) for all multi-byte values
 // We use ntohs() to convert from network byte order to host byte order
 bool TftpPacket::Deserialize(const std::vector<uint8_t>& data) {
-    if (data.size() < 2) {
-        TFTP_ERROR("Packet size too small");
+    // Comprehensive input validation
+    if (data.empty()) {
+        TFTP_ERROR("Empty packet data");
+        return false;
+    }
+    
+    if (data.size() < kMinPacketSize || data.size() > kMaxPacketSize) {
+        TFTP_ERROR("Invalid packet size %zu (min=%zu, max=%zu)", data.size(), kMinPacketSize, kMaxPacketSize);
+        return false;
+    }
+    
+    if (data.size() < sizeof(uint16_t)) {
+        TFTP_ERROR("Packet too small for opcode: size=%zu", data.size());
         return false;
     }
     
@@ -276,31 +317,46 @@ bool TftpPacket::Deserialize(const std::vector<uint8_t>& data) {
     }
     TFTP_INFO("Complete hex dump:\n%s", hex_dump.c_str());
     
-    // opcode (convert from network byte order to host byte order)
+    // opcode (convert from network byte order to host byte order) - with bounds checking
     uint16_t opcode_network;
+    if (data.size() < sizeof(uint16_t)) {
+        TFTP_ERROR("Insufficient data for opcode: size=%zu", data.size());
+        return false;
+    }
     std::memcpy(&opcode_network, &data[0], sizeof(uint16_t));
     op_code_ = static_cast<OpCode>(ntohs(opcode_network));
+    
+    // Validate opcode is in valid range
+    uint16_t opcode_value = static_cast<uint16_t>(op_code_);
+    if (opcode_value < 1 || opcode_value > 6) {
+        TFTP_ERROR("Invalid opcode value: %u", opcode_value);
+        return false;
+    }
     
     size_t offset = 2;
     
     switch (op_code_) {
         case OpCode::kReadRequest:
         case OpCode::kWriteRequest: {
-            // filename
-            filename_ = read_string(data, offset);
+            // filename with length validation
+            filename_ = read_string(data, offset, kMaxFilenameLength);
             if (filename_.empty()) {
-                TFTP_ERROR("Empty filename");
+                TFTP_ERROR("Empty or invalid filename");
                 return false;
             }
             TFTP_INFO("Parsed filename: %s", filename_.c_str());
             
-            // mode
+            // mode with bounds checking
             if (offset >= data.size()) {
                 TFTP_ERROR("Packet too small for mode");
                 return false;
             }
             
-            std::string mode_str = read_string(data, offset);
+            std::string mode_str = read_string(data, offset, kMaxStringLength);
+            if (mode_str.empty()) {
+                TFTP_ERROR("Empty or invalid mode string");
+                return false;
+            }
             TFTP_INFO("Parsed mode: %s", mode_str.c_str());
             try {
                 mode_ = string_to_mode(mode_str);
@@ -310,80 +366,153 @@ bool TftpPacket::Deserialize(const std::vector<uint8_t>& data) {
                 return false;
             }
             
-            // options (if present)
+            // options (if present) with comprehensive validation
             options_.clear();
+            size_t options_count = 0;
             TFTP_INFO("Checking for options, remaining bytes: %zu", data.size() - offset);
-            while (offset < data.size()) {
-                std::string option_name = read_string(data, offset);
-                if (option_name.empty() || offset >= data.size()) {
-                    TFTP_INFO("No more options found or invalid option name");
+            
+            while (offset < data.size() && options_count < kMaxOptionsCount) {
+                std::string option_name = read_string(data, offset, kMaxOptionNameLength);
+                if (option_name.empty()) {
+                    TFTP_INFO("No more valid options found or invalid option name");
                     break;
                 }
-                std::string option_value = read_string(data, offset);
+                
+                if (offset >= data.size()) {
+                    TFTP_ERROR("Missing option value for option: %s", option_name.c_str());
+                    return false;
+                }
+                
+                std::string option_value = read_string(data, offset, kMaxOptionValueLength);
+                if (option_value.empty()) {
+                    TFTP_ERROR("Empty or invalid option value for option: %s", option_name.c_str());
+                    return false;
+                }
+                
                 options_[option_name] = option_value;
+                options_count++;
                 TFTP_INFO("TFTP option: %s = %s", option_name.c_str(), option_value.c_str());
             }
+            
+            if (options_count >= kMaxOptionsCount && offset < data.size()) {
+                TFTP_ERROR("Too many options in packet (max=%zu)", kMaxOptionsCount);
+                return false;
+            }
+            
             TFTP_INFO("Total options parsed: %zu", options_.size());
             
             break;
         }
         case OpCode::kData: {
             if (data.size() < 4) {
-                TFTP_ERROR("DATA packet too small");
+                TFTP_ERROR("DATA packet too small: size=%zu", data.size());
                 return false;
             }
             
-            // block number (convert from network byte order to host byte order)
+            // block number (convert from network byte order to host byte order) with bounds checking
             uint16_t block_number_network;
+            if (data.size() < 4) {
+                TFTP_ERROR("Insufficient data for DATA block number: size=%zu", data.size());
+                return false;
+            }
             std::memcpy(&block_number_network, &data[2], sizeof(uint16_t));
             block_number_ = ntohs(block_number_network);
             
-            // data
+            // data with size validation
+            size_t data_size = data.size() - 4;
+            if (data_size > kMaxDataSize) {
+                TFTP_ERROR("DATA payload too large: %zu bytes (max=%zu)", data_size, kMaxDataSize);
+                return false;
+            }
             data_.assign(data.begin() + 4, data.end());
+            
+            TFTP_INFO("DATA packet: block=%u, data_size=%zu", block_number_, data_.size());
             break;
         }
         case OpCode::kAcknowledge: {
             if (data.size() != 4) {
-                TFTP_ERROR("ACK packet has incorrect size");
+                TFTP_ERROR("ACK packet has incorrect size: %zu (expected: 4)", data.size());
                 return false;
             }
             
-            // block number (convert from network byte order to host byte order)
+            // block number (convert from network byte order to host byte order) with bounds checking
             uint16_t block_number_network;
+            if (data.size() < 4) {
+                TFTP_ERROR("Insufficient data for ACK block number: size=%zu", data.size());
+                return false;
+            }
             std::memcpy(&block_number_network, &data[2], sizeof(uint16_t));
             block_number_ = ntohs(block_number_network);
+            
+            TFTP_INFO("ACK packet: block=%u", block_number_);
             break;
         }
         case OpCode::kError: {
             if (data.size() < 5) {
-                TFTP_ERROR("ERROR packet too small");
+                TFTP_ERROR("ERROR packet too small: size=%zu", data.size());
                 return false;
             }
             
-            // error code (convert from network byte order to host byte order)
+            // error code (convert from network byte order to host byte order) with bounds checking
             uint16_t error_code_network;
+            if (data.size() < 4) {
+                TFTP_ERROR("Insufficient data for ERROR code: size=%zu", data.size());
+                return false;
+            }
             std::memcpy(&error_code_network, &data[2], sizeof(uint16_t));
-            error_code_ = static_cast<ErrorCode>(ntohs(error_code_network));
+            uint16_t error_code_value = ntohs(error_code_network);
             
-            // error message
-            error_message_ = read_string(data, offset);
+            // Validate error code is in valid range
+            if (error_code_value > 7) {
+                TFTP_ERROR("Invalid error code: %u", error_code_value);
+                return false;
+            }
+            error_code_ = static_cast<ErrorCode>(error_code_value);
+            
+            // error message with length validation
+            error_message_ = read_string(data, offset, kMaxErrorMessageLength);
+            if (error_message_.empty()) {
+                TFTP_WARN("Empty error message in ERROR packet");
+                // Don't fail for empty error message as it may be valid
+            }
+            
+            TFTP_INFO("ERROR packet: code=%u, message='%s'", error_code_value, error_message_.c_str());
             break;
         }
         case OpCode::kOACK: {
-            // OACK packet: opcode + (option + 0 + value + 0)*
+            // OACK packet: opcode + (option + 0 + value + 0)* with comprehensive validation
             options_.clear();
+            size_t options_count = 0;
             TFTP_INFO("Parsing OACK packet, remaining bytes: %zu", data.size() - offset);
             
-            while (offset < data.size()) {
-                std::string option_name = read_string(data, offset);
-                if (option_name.empty() || offset >= data.size()) {
-                    TFTP_INFO("No more options found or invalid option name in OACK");
+            while (offset < data.size() && options_count < kMaxOptionsCount) {
+                std::string option_name = read_string(data, offset, kMaxOptionNameLength);
+                if (option_name.empty()) {
+                    TFTP_INFO("No more valid options found or invalid option name in OACK");
                     break;
                 }
-                std::string option_value = read_string(data, offset);
+                
+                if (offset >= data.size()) {
+                    TFTP_ERROR("Missing option value for OACK option: %s", option_name.c_str());
+                    return false;
+                }
+                
+                std::string option_value = read_string(data, offset, kMaxOptionValueLength);
+                if (option_value.empty()) {
+                    TFTP_ERROR("Empty or invalid option value for OACK option: %s", option_name.c_str());
+                    return false;
+                }
+                
                 options_[option_name] = option_value;
+                options_count++;
                 TFTP_INFO("OACK option: %s = %s", option_name.c_str(), option_value.c_str());
             }
+            
+            if (options_count >= kMaxOptionsCount && offset < data.size()) {
+                TFTP_ERROR("Too many options in OACK packet (max=%zu)", kMaxOptionsCount);
+                return false;
+            }
+            
             TFTP_INFO("Total OACK options parsed: %zu", options_.size());
             break;
         }
