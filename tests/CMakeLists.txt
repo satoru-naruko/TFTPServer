@@ -21,6 +21,7 @@ set(TEST_SOURCES
     tftp_curl_security_test.cpp
     tftp_server_security_test.cpp
     tftp_packet_security_test.cpp
+    tftp_thread_pool_test.cpp
 )
 
 # Create test executable

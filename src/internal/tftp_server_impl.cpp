@@ -52,9 +52,11 @@ TftpServerImpl::TftpServerImpl(const std::string& root_dir, uint16_t port)
       sockfd_(-1),
 #endif
       running_(false),
+      thread_pool_(nullptr),
       secure_mode_(true),
       max_transfer_size_(1024 * 1024 * 1024),  // 1MB
-      timeout_seconds_(5) {
+      timeout_seconds_(5),
+      thread_pool_size_(std::thread::hardware_concurrency()) {
     if (!root_dir_.empty() && root_dir_.back() != '/' && root_dir_.back() != '\\') {
         root_dir_ += '/';
     }
@@ -108,9 +110,12 @@ bool TftpServerImpl::Start() {
         CLOSESOCKET(sockfd_);
         return false;
     }
+    // Initialize thread pool
+    thread_pool_ = std::make_unique<TftpThreadPool>(thread_pool_size_);
+    
     running_ = true;
     server_thread_ = std::thread(&TftpServerImpl::ServerLoop, this);
-    TFTP_INFO("TFTP server started on port %d", port_);
+    TFTP_INFO("TFTP server started on port %d with %zu worker threads", port_, thread_pool_size_);
     return true;
 }
 
@@ -119,6 +124,12 @@ void TftpServerImpl::Stop() {
     
     // Set flag first so ServerLoop exits early
     running_ = false;
+    
+    // Shutdown thread pool first to stop accepting new tasks
+    if (thread_pool_) {
+        thread_pool_->Shutdown();
+        thread_pool_.reset();
+    }
     
     // Close socket
     if (
@@ -188,10 +199,18 @@ void TftpServerImpl::ServerLoop() {
                              (struct sockaddr*)&client_addr, &addrlen);
         if (recvlen > 0) {
             TFTP_INFO("Received packet from client: %zu bytes", static_cast<size_t>(recvlen));
-            std::thread client_thread(&TftpServerImpl::HandleClient, this,
-                                    std::vector<uint8_t>(buffer, buffer + recvlen),
-                                    client_addr);
-            client_thread.detach();
+            // Submit client handling to thread pool instead of creating new thread
+            if (thread_pool_ && !thread_pool_->IsShuttingDown()) {
+                try {
+                    thread_pool_->Submit([this, packet_data = std::vector<uint8_t>(buffer, buffer + recvlen), client_addr]() {
+                        this->HandleClient(packet_data, client_addr);
+                    });
+                } catch (const std::exception& e) {
+                    TFTP_ERROR("Failed to submit client task to thread pool: %s", e.what());
+                }
+            } else {
+                TFTP_WARN("Thread pool not available, dropping client request");
+            }
         }
     }
 }

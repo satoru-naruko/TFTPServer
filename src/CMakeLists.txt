@@ -10,6 +10,7 @@ set(TFTPSERVER_SOURCES
     
     # Internal implementation files
     internal/tftp_server_impl.cpp
+    internal/tftp_thread_pool.cpp
     # internal/tftp_client_impl.cpp  # Disabled as not used
     # internal/tftp_curl_wrapper_impl.cpp  # Temporarily disabled (not used in tests)
     
@@ -27,6 +28,7 @@ set(TFTPSERVER_HEADERS
     
     # Internal headers
     internal/tftp_server_impl.h
+    internal/tftp_thread_pool.h
 )
 
 # Create TFTP server library

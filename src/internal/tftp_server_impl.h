@@ -19,6 +19,7 @@
 #include "tftp/tftp_common.h"
 #include "tftp/tftp_packet.h"
 #include "tftp/tftp_logger.h"
+#include "internal/tftp_thread_pool.h"
 #include <string>
 #include <thread>
 #include <atomic>
@@ -49,6 +50,7 @@ public:
     void SetSecureMode(bool secure) { secure_mode_ = secure; }
     void SetMaxTransferSize(size_t size) { max_transfer_size_ = size; }
     void SetTimeout(int seconds) { timeout_seconds_ = seconds; }
+    void SetThreadPoolSize(size_t size) { thread_pool_size_ = size; }
 
 private:
     void ServerLoop();
@@ -109,9 +111,11 @@ private:
 #endif
     std::atomic<bool> running_;
     std::thread server_thread_;
+    std::unique_ptr<TftpThreadPool> thread_pool_;
     bool secure_mode_;
     size_t max_transfer_size_;
     int timeout_seconds_;
+    size_t thread_pool_size_;
 
     std::function<bool(const std::string&, std::vector<uint8_t>&)> read_callback_;
     std::function<bool(const std::string&, const std::vector<uint8_t>&)> write_callback_;
