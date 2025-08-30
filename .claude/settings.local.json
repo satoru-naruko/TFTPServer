@@ -26,7 +26,8 @@
       "Bash(\"./DEBUG/bin/tftpserver_tests.exe\" --gtest_filter=\"TftpPacketSecurityTest.BufferOverflow_OversizedOptionName\" --gtest_output=xml:focused_test_results.xml)",
       "Bash(\"./DEBUG/bin/tftpserver_tests.exe\" --gtest_output=xml:full_test_results.xml)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(rm:*)"
     ],
     "deny": [],
     "ask": []
