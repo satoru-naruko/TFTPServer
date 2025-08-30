@@ -26,6 +26,8 @@
 #include <functional>
 #include <memory>
 #include <filesystem>
+#include <mutex>
+#include <shared_mutex>
 
 namespace tftpserver {
 namespace internal {
@@ -40,17 +42,31 @@ public:
     bool IsRunning() const;
 
     void SetReadCallback(std::function<bool(const std::string&, std::vector<uint8_t>&)> callback) {
+        std::unique_lock<std::shared_mutex> lock(config_mutex_);
         read_callback_ = std::move(callback);
     }
 
     void SetWriteCallback(std::function<bool(const std::string&, const std::vector<uint8_t>&)> callback) {
+        std::unique_lock<std::shared_mutex> lock(config_mutex_);
         write_callback_ = std::move(callback);
     }
 
-    void SetSecureMode(bool secure) { secure_mode_ = secure; }
-    void SetMaxTransferSize(size_t size) { max_transfer_size_ = size; }
-    void SetTimeout(int seconds) { timeout_seconds_ = seconds; }
-    void SetThreadPoolSize(size_t size) { thread_pool_size_ = size; }
+    void SetSecureMode(bool secure) { 
+        std::unique_lock<std::shared_mutex> lock(config_mutex_);
+        secure_mode_ = secure; 
+    }
+    void SetMaxTransferSize(size_t size) { 
+        std::unique_lock<std::shared_mutex> lock(config_mutex_);
+        max_transfer_size_ = size; 
+    }
+    void SetTimeout(int seconds) { 
+        std::unique_lock<std::shared_mutex> lock(config_mutex_);
+        timeout_seconds_ = seconds; 
+    }
+    void SetThreadPoolSize(size_t size) { 
+        std::unique_lock<std::shared_mutex> lock(config_mutex_);
+        thread_pool_size_ = size; 
+    }
 
 private:
     void ServerLoop();
@@ -119,6 +135,10 @@ private:
 
     std::function<bool(const std::string&, std::vector<uint8_t>&)> read_callback_;
     std::function<bool(const std::string&, const std::vector<uint8_t>&)> write_callback_;
+    
+    // Thread synchronization
+    mutable std::shared_mutex config_mutex_;  // Protects configuration and callbacks
+    mutable std::mutex thread_pool_mutex_;    // Protects thread pool access
 };
 
 } // namespace internal
