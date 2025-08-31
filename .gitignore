@@ -153,6 +153,10 @@ test_results/
 *.xml
 *.log
 
+# Security test files
+security_test_files/
+security_tests/
+
 # Coverage reports
 coverage/
 *.gcov
@@ -187,6 +191,9 @@ conan.lock
 # =============================================================================
 # Temporary and backup files
 # =============================================================================
+
+# Temporary folder and files
+curl_perf_test_files/
 
 # Backup files
 *.bak
@@ -232,4 +239,5 @@ local_config.*
 # Keep documentation
 !docs/
 !README.md
-!*.md 
+!*.mdｈ
+
