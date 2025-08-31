@@ -52,9 +52,11 @@ TftpServerImpl::TftpServerImpl(const std::string& root_dir, uint16_t port)
       sockfd_(-1),
 #endif
       running_(false),
+      thread_pool_(nullptr),
       secure_mode_(true),
       max_transfer_size_(1024 * 1024 * 1024),  // 1MB
-      timeout_seconds_(5) {
+      timeout_seconds_(5),
+      thread_pool_size_(std::thread::hardware_concurrency()) {
     if (!root_dir_.empty() && root_dir_.back() != '/' && root_dir_.back() != '\\') {
         root_dir_ += '/';
     }
@@ -108,9 +110,15 @@ bool TftpServerImpl::Start() {
         CLOSESOCKET(sockfd_);
         return false;
     }
+    // Initialize thread pool with mutex protection
+    {
+        std::lock_guard<std::mutex> lock(thread_pool_mutex_);
+        thread_pool_ = std::make_unique<TftpThreadPool>(thread_pool_size_);
+    }
+    
     running_ = true;
     server_thread_ = std::thread(&TftpServerImpl::ServerLoop, this);
-    TFTP_INFO("TFTP server started on port %d", port_);
+    TFTP_INFO("TFTP server started on port %d with %zu worker threads", port_, thread_pool_size_);
     return true;
 }
 
@@ -119,6 +127,15 @@ void TftpServerImpl::Stop() {
     
     // Set flag first so ServerLoop exits early
     running_ = false;
+    
+    // Shutdown thread pool first to stop accepting new tasks
+    {
+        std::lock_guard<std::mutex> lock(thread_pool_mutex_);
+        if (thread_pool_) {
+            thread_pool_->Shutdown();
+            thread_pool_.reset();
+        }
+    }
     
     // Close socket
     if (
@@ -188,10 +205,21 @@ void TftpServerImpl::ServerLoop() {
                              (struct sockaddr*)&client_addr, &addrlen);
         if (recvlen > 0) {
             TFTP_INFO("Received packet from client: %zu bytes", static_cast<size_t>(recvlen));
-            std::thread client_thread(&TftpServerImpl::HandleClient, this,
-                                    std::vector<uint8_t>(buffer, buffer + recvlen),
-                                    client_addr);
-            client_thread.detach();
+            // Submit client handling to thread pool with proper synchronization
+            {
+                std::lock_guard<std::mutex> lock(thread_pool_mutex_);
+                if (thread_pool_ && !thread_pool_->IsShuttingDown()) {
+                    try {
+                        thread_pool_->Submit([this, packet_data = std::vector<uint8_t>(buffer, buffer + recvlen), client_addr]() {
+                            this->HandleClient(packet_data, client_addr);
+                        });
+                    } catch (const std::exception& e) {
+                        TFTP_ERROR("Failed to submit client task to thread pool: %s", e.what());
+                    }
+                } else {
+                    TFTP_WARN("Thread pool not available, dropping client request");
+                }
+            }
         }
     }
 }
@@ -238,9 +266,17 @@ void TftpServerImpl::HandleClient(const std::vector<uint8_t>& initial_packet,
     TFTP_INFO("Client socket bound successfully");
     TransferMode mode = packet.GetMode();
     std::string filename = packet.GetFilename();
+    
+    // Read configuration with shared lock to avoid race conditions
+    bool is_secure_mode;
+    {
+        std::shared_lock<std::shared_mutex> lock(config_mutex_);
+        is_secure_mode = secure_mode_;
+    }
+    
     TFTP_INFO("Processing packet - OpCode: %d, filename: %s, secure_mode: %s", 
-             static_cast<int>(packet.GetOpCode()), filename.c_str(), secure_mode_ ? "true" : "false");
-    if (secure_mode_ && !util::IsPathSecure(filename, root_dir_)) {
+             static_cast<int>(packet.GetOpCode()), filename.c_str(), is_secure_mode ? "true" : "false");
+    if (is_secure_mode && !util::IsPathSecure(filename, root_dir_)) {
         TFTP_INFO("Path security check failed for: %s", filename.c_str());
         SendError(client_sock, client_addr, ErrorCode::kAccessViolation,
                  "Access denied");
@@ -283,16 +319,24 @@ void TftpServerImpl::HandleReadRequest(
 
     (void)mode; // Suppress unused parameter warning
 
-    // Read data
+    // Read data with callback protection
     std::vector<uint8_t> file_data;
-    bool success = read_callback_(filepath, file_data);
+    bool success;
+    size_t max_size;
+    int timeout_secs;
+    {
+        std::shared_lock<std::shared_mutex> lock(config_mutex_);
+        success = read_callback_(filepath, file_data);
+        max_size = max_transfer_size_;
+        timeout_secs = timeout_seconds_;
+    }
     
     if (!success) {
         SendError(sock, client_addr, ErrorCode::kFileNotFound, "File not found");
         return;
     }
     
-    if (file_data.size() > max_transfer_size_) {
+    if (file_data.size() > max_size) {
         SendError(sock, client_addr, ErrorCode::kDiskFull, "File size too large");
         return;
     }
@@ -318,7 +362,7 @@ void TftpServerImpl::HandleReadRequest(
         // Wait for ACK
         TftpPacket ack_packet;
         sockaddr_in ack_addr = {};
-        if (!ReceivePacket(sock, ack_addr, ack_packet, timeout_seconds_ * 1000)) {
+        if (!ReceivePacket(sock, ack_addr, ack_packet, timeout_secs * 1000)) {
             TFTP_ERROR("ACK timeout");
             return;
         }
@@ -352,6 +396,15 @@ void TftpServerImpl::HandleWriteRequest(
     TFTP_INFO("File write request: %s", filepath.c_str());
     
     (void)mode; // Suppress unused parameter warning
+    
+    // Read configuration once to avoid multiple locks
+    size_t max_size;
+    int timeout_secs;
+    {
+        std::shared_lock<std::shared_mutex> lock(config_mutex_);
+        max_size = max_transfer_size_;
+        timeout_secs = timeout_seconds_;
+    }
     
     // Get expected file size from tsize option
     size_t expected_file_size = 0;
@@ -483,8 +536,8 @@ void TftpServerImpl::HandleWriteRequest(
         sockaddr_in data_addr = {};
         TFTP_INFO("Waiting for data packet #%d on client socket", expected_block);
         
-        TFTP_INFO("Starting ReceivePacket call with timeout %d ms", timeout_seconds_ * 1000);
-        if (!ReceivePacket(sock, data_addr, data_packet, timeout_seconds_ * 1000)) {
+        TFTP_INFO("Starting ReceivePacket call with timeout %d ms", timeout_secs * 1000);
+        if (!ReceivePacket(sock, data_addr, data_packet, timeout_secs * 1000)) {
             TFTP_ERROR("Data packet receive timeout for block #%d", expected_block);
             return;
         }
@@ -539,8 +592,8 @@ void TftpServerImpl::HandleWriteRequest(
                  last_packet ? "YES" : "NO");
         
         // File size limit check
-        if (file_data.size() > max_transfer_size_) {
-            TFTP_ERROR("File size exceeded limit: %zu > %zu", file_data.size(), max_transfer_size_);
+        if (file_data.size() > max_size) {
+            TFTP_ERROR("File size exceeded limit: %zu > %zu", file_data.size(), max_size);
             SendError(sock, client_addr, ErrorCode::kDiskFull, "File size too large");
             return;
         }
@@ -557,9 +610,13 @@ void TftpServerImpl::HandleWriteRequest(
     
     TFTP_INFO("All data received: %zu bytes, %d blocks. Writing to file...", file_data.size(), expected_block - 1);
     
-    // Write file
+    // Write file with callback protection
     TFTP_INFO("Calling write_callback_ for path: %s", filepath.c_str());
-    bool success = write_callback_(filepath, file_data);
+    bool success;
+    {
+        std::shared_lock<std::shared_mutex> lock(config_mutex_);
+        success = write_callback_(filepath, file_data);
+    }
     if (!success) {
         TFTP_ERROR("File write failed: %s", filepath.c_str());
         SendError(sock, client_addr, ErrorCode::kAccessViolation, "File write failed");

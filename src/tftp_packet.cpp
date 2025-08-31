@@ -22,14 +22,17 @@ namespace {
     }
 
     // Read null-terminated string with comprehensive bounds checking
-    std::string read_string(const std::vector<uint8_t>& data, size_t& offset, size_t max_length = kMaxStringLength) {
+    // Returns empty string on failure, non-empty string on success
+    // Updates offset parameter to indicate parsing success/failure position
+    std::string read_string_validated(const std::vector<uint8_t>& data, size_t& offset, size_t max_length = kMaxStringLength) {
         std::string result;
         size_t start_offset = offset;
         
         // Validate offset is within bounds
         if (offset >= data.size()) {
             TFTP_ERROR("read_string: offset %zu exceeds data size %zu", offset, data.size());
-            return result;  // Return empty string for invalid offset
+            offset = SIZE_MAX;  // Signal failure with invalid offset
+            return std::string();
         }
         
         // Read characters with multiple safety checks
@@ -42,13 +45,21 @@ namespace {
         // Validate string termination
         if (offset >= data.size()) {
             TFTP_ERROR("read_string: reached end of data without null terminator at offset %zu", offset);
-            return std::string();  // Return empty string for unterminated string
+            offset = SIZE_MAX;  // Signal failure
+            return std::string();
         }
         
         // Check for maximum length exceeded
-        if (chars_read >= max_length && data[offset] != 0) {
-            TFTP_ERROR("read_string: string exceeds maximum length %zu at offset %zu", max_length, start_offset);
-            return std::string();  // Return empty string for oversized string
+        TFTP_INFO("read_string_validated: chars_read=%zu, max_length=%zu", chars_read, max_length);
+        if (chars_read >= max_length) {
+            // If we read the maximum length, check if there are more non-null characters
+            // This indicates the string exceeds the maximum allowed length
+            if (offset < data.size() && data[offset] != 0) {
+                TFTP_ERROR("read_string: string exceeds maximum length %zu at offset %zu", max_length, start_offset);
+                TFTP_INFO("read_string_validated: SETTING OFFSET TO SIZE_MAX AND RETURNING");
+                offset = SIZE_MAX;  // Signal failure
+                return std::string();
+            }
         }
         
         // Skip null terminator safely
@@ -56,16 +67,22 @@ namespace {
             ++offset;
         }
         
-        // Validate final result
-        if (result.length() > max_length) {
-            TFTP_ERROR("read_string: final string length %zu exceeds maximum %zu", result.length(), max_length);
-            return std::string();  // Return empty string for invalid result
-        }
-        
         // Log successful parsing with security info
         TFTP_INFO("read_string: start_offset=%zu, end_offset=%zu, string_length=%zu, max_allowed=%zu, result='%s'", 
                  start_offset, offset, result.length(), max_length, result.c_str());
         
+        return result;
+    }
+
+    // Legacy wrapper that maintains old behavior for backwards compatibility
+    std::string read_string(const std::vector<uint8_t>& data, size_t& offset, size_t max_length = kMaxStringLength) {
+        size_t saved_offset = offset;
+        std::string result = read_string_validated(data, offset, max_length);
+        if (offset == SIZE_MAX) {
+            // Restore offset on failure for legacy compatibility
+            offset = saved_offset;
+            return std::string();  // Return empty string on failure
+        }
         return result;
     }
 
@@ -164,6 +181,17 @@ std::string TftpPacket::GetOption(const std::string& option_name) const {
 
 void TftpPacket::SetOption(const std::string& option_name, const std::string& option_value) {
     options_[option_name] = option_value;
+}
+
+void TftpPacket::ResetState() {
+    op_code_ = OpCode::kReadRequest;
+    block_number_ = 0;
+    error_code_ = ErrorCode::kNotDefined;
+    filename_.clear();
+    mode_ = TransferMode::kOctet;
+    data_.clear();
+    error_message_.clear();
+    options_.clear();
 }
 
 // Serialize implementation
@@ -288,6 +316,9 @@ std::vector<uint8_t> TftpPacket::Serialize() const {
 // NOTE: TFTP uses network byte order (big-endian) for all multi-byte values
 // We use ntohs() to convert from network byte order to host byte order
 bool TftpPacket::Deserialize(const std::vector<uint8_t>& data) {
+    // Reset state first to ensure clean state on failure
+    ResetState();
+    
     // Comprehensive input validation
     if (data.empty()) {
         TFTP_ERROR("Empty packet data");
@@ -338,13 +369,17 @@ bool TftpPacket::Deserialize(const std::vector<uint8_t>& data) {
     switch (op_code_) {
         case OpCode::kReadRequest:
         case OpCode::kWriteRequest: {
-            // filename with length validation
-            filename_ = read_string(data, offset, kMaxFilenameLength);
-            if (filename_.empty()) {
-                TFTP_ERROR("Empty or invalid filename");
+            // Parse into temporary variables first to ensure atomic success/failure
+            std::string temp_filename = read_string_validated(data, offset, kMaxFilenameLength);
+            if (offset == SIZE_MAX) {
+                TFTP_ERROR("Failed to parse filename (invalid or oversized)");
                 return false;
             }
-            TFTP_INFO("Parsed filename: %s", filename_.c_str());
+            if (temp_filename.empty()) {
+                TFTP_ERROR("Empty filename not allowed");
+                return false;
+            }
+            TFTP_INFO("Parsed filename: %s", temp_filename.c_str());
             
             // mode with bounds checking
             if (offset >= data.size()) {
@@ -352,14 +387,19 @@ bool TftpPacket::Deserialize(const std::vector<uint8_t>& data) {
                 return false;
             }
             
-            std::string mode_str = read_string(data, offset, kMaxStringLength);
+            std::string mode_str = read_string_validated(data, offset, kMaxStringLength);
+            if (offset == SIZE_MAX) {
+                TFTP_ERROR("Failed to parse mode string (invalid or oversized)");
+                return false;
+            }
             if (mode_str.empty()) {
-                TFTP_ERROR("Empty or invalid mode string");
+                TFTP_ERROR("Empty mode string not allowed");
                 return false;
             }
             TFTP_INFO("Parsed mode: %s", mode_str.c_str());
+            TransferMode temp_mode;
             try {
-                mode_ = string_to_mode(mode_str);
+                temp_mode = string_to_mode(mode_str);
             } catch (const TftpException&) {
                 // Catch exception object to resolve unused variable warning, but don't use it
                 TFTP_ERROR("Invalid mode: %s", mode_str.c_str());
@@ -367,14 +407,28 @@ bool TftpPacket::Deserialize(const std::vector<uint8_t>& data) {
             }
             
             // options (if present) with comprehensive validation
-            options_.clear();
+            std::unordered_map<std::string, std::string> temp_options;
             size_t options_count = 0;
             TFTP_INFO("Checking for options, remaining bytes: %zu", data.size() - offset);
+            TFTP_INFO("Loop conditions: offset=%zu < data.size()=%zu? %s, options_count=%zu < kMaxOptionsCount=%zu? %s", 
+                     offset, data.size(), (offset < data.size()) ? "true" : "false",
+                     options_count, kMaxOptionsCount, (options_count < kMaxOptionsCount) ? "true" : "false");
             
             while (offset < data.size() && options_count < kMaxOptionsCount) {
-                std::string option_name = read_string(data, offset, kMaxOptionNameLength);
+                TFTP_INFO("Entering option parsing loop iteration %zu", options_count);
+                size_t option_name_offset = offset;
+                std::string option_name = read_string_validated(data, offset, kMaxOptionNameLength);
+                
+                // Check for parsing failure (indicated by offset being set to SIZE_MAX)
+                TFTP_INFO("After read_string_validated: offset=%zu, SIZE_MAX=%zu", offset, SIZE_MAX);
+                if (offset == SIZE_MAX) {
+                    TFTP_ERROR("Failed to parse option name (invalid or oversized) - RETURNING FALSE");
+                    return false;
+                }
+                TFTP_INFO("Option name parsing succeeded, continuing with option_name='%s'", option_name.c_str());
+                
                 if (option_name.empty()) {
-                    TFTP_INFO("No more valid options found or invalid option name");
+                    TFTP_INFO("No more valid options found (empty option name)");
                     break;
                 }
                 
@@ -383,13 +437,21 @@ bool TftpPacket::Deserialize(const std::vector<uint8_t>& data) {
                     return false;
                 }
                 
-                std::string option_value = read_string(data, offset, kMaxOptionValueLength);
-                if (option_value.empty()) {
-                    TFTP_ERROR("Empty or invalid option value for option: %s", option_name.c_str());
+                size_t option_value_offset = offset;
+                std::string option_value = read_string_validated(data, offset, kMaxOptionValueLength);
+                
+                // Check for parsing failure (indicated by offset being set to SIZE_MAX)
+                if (offset == SIZE_MAX) {
+                    TFTP_ERROR("Failed to parse option value for option: %s (invalid or oversized)", option_name.c_str());
                     return false;
                 }
                 
-                options_[option_name] = option_value;
+                if (option_value.empty()) {
+                    TFTP_ERROR("Empty option value not allowed for option: %s", option_name.c_str());
+                    return false;
+                }
+                
+                temp_options[option_name] = option_value;
                 options_count++;
                 TFTP_INFO("TFTP option: %s = %s", option_name.c_str(), option_value.c_str());
             }
@@ -399,7 +461,12 @@ bool TftpPacket::Deserialize(const std::vector<uint8_t>& data) {
                 return false;
             }
             
-            TFTP_INFO("Total options parsed: %zu", options_.size());
+            TFTP_INFO("Total options parsed: %zu", temp_options.size());
+            
+            // All parsing successful - now assign to member variables atomically
+            filename_ = temp_filename;
+            mode_ = temp_mode;
+            options_ = temp_options;
             
             break;
         }
@@ -467,28 +534,40 @@ bool TftpPacket::Deserialize(const std::vector<uint8_t>& data) {
                 TFTP_ERROR("Invalid error code: %u", error_code_value);
                 return false;
             }
-            error_code_ = static_cast<ErrorCode>(error_code_value);
             
-            // error message with length validation
-            error_message_ = read_string(data, offset, kMaxErrorMessageLength);
-            if (error_message_.empty()) {
+            // error message with length validation (parse to temporary first)
+            offset = 4;  // Error message starts after opcode (2 bytes) + error code (2 bytes)
+            std::string temp_error_message = read_string_validated(data, offset, kMaxErrorMessageLength);
+            if (offset == SIZE_MAX) {
+                TFTP_ERROR("Failed to parse error message (invalid or oversized)");
+                return false;
+            }
+            if (temp_error_message.empty()) {
                 TFTP_WARN("Empty error message in ERROR packet");
                 // Don't fail for empty error message as it may be valid
             }
             
-            TFTP_INFO("ERROR packet: code=%u, message='%s'", error_code_value, error_message_.c_str());
+            // All parsing successful - now assign to member variables atomically
+            error_code_ = static_cast<ErrorCode>(error_code_value);
+            error_message_ = temp_error_message;
+            
+            TFTP_INFO("ERROR packet: code=%u, message='%s'", error_code_value, temp_error_message.c_str());
             break;
         }
         case OpCode::kOACK: {
             // OACK packet: opcode + (option + 0 + value + 0)* with comprehensive validation
-            options_.clear();
+            std::unordered_map<std::string, std::string> temp_oack_options;
             size_t options_count = 0;
             TFTP_INFO("Parsing OACK packet, remaining bytes: %zu", data.size() - offset);
             
             while (offset < data.size() && options_count < kMaxOptionsCount) {
-                std::string option_name = read_string(data, offset, kMaxOptionNameLength);
+                std::string option_name = read_string_validated(data, offset, kMaxOptionNameLength);
+                if (offset == SIZE_MAX) {
+                    TFTP_ERROR("Failed to parse OACK option name (invalid or oversized)");
+                    return false;
+                }
                 if (option_name.empty()) {
-                    TFTP_INFO("No more valid options found or invalid option name in OACK");
+                    TFTP_INFO("No more valid options found (empty option name) in OACK");
                     break;
                 }
                 
@@ -497,13 +576,17 @@ bool TftpPacket::Deserialize(const std::vector<uint8_t>& data) {
                     return false;
                 }
                 
-                std::string option_value = read_string(data, offset, kMaxOptionValueLength);
+                std::string option_value = read_string_validated(data, offset, kMaxOptionValueLength);
+                if (offset == SIZE_MAX) {
+                    TFTP_ERROR("Failed to parse OACK option value for option: %s (invalid or oversized)", option_name.c_str());
+                    return false;
+                }
                 if (option_value.empty()) {
-                    TFTP_ERROR("Empty or invalid option value for OACK option: %s", option_name.c_str());
+                    TFTP_ERROR("Empty option value not allowed for OACK option: %s", option_name.c_str());
                     return false;
                 }
                 
-                options_[option_name] = option_value;
+                temp_oack_options[option_name] = option_value;
                 options_count++;
                 TFTP_INFO("OACK option: %s = %s", option_name.c_str(), option_value.c_str());
             }
@@ -513,7 +596,10 @@ bool TftpPacket::Deserialize(const std::vector<uint8_t>& data) {
                 return false;
             }
             
-            TFTP_INFO("Total OACK options parsed: %zu", options_.size());
+            TFTP_INFO("Total OACK options parsed: %zu", temp_oack_options.size());
+            
+            // All parsing successful - now assign to member variables atomically
+            options_ = temp_oack_options;
             break;
         }
         default:

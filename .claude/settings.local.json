@@ -18,7 +18,16 @@
       "Bash(taskkill:*)",
       "Bash(timeout 10 ctest -C Debug --output-on-failure -R \"TftpServerTest.FileDownload\" -V)",
       "Bash(cat:*)",
-      "Bash(setup_dev_env.cmd)"
+      "Bash(setup_dev_env.cmd)",
+      "Bash(git checkout:*)",
+      "Bash(g++:*)",
+      "Bash(Debug\\bin\\tftpserver_tests.exe --gtest_filter=\"TftpPacketSecurityTest.*\" --gtest_output=xml:packet_security_test_results.xml)",
+      "Bash(\"./DEBUG/bin/tftpserver_tests.exe\" --gtest_filter=\"TftpPacketSecurityTest.*\")",
+      "Bash(\"./DEBUG/bin/tftpserver_tests.exe\" --gtest_filter=\"TftpPacketSecurityTest.BufferOverflow_OversizedOptionName\" --gtest_output=xml:focused_test_results.xml)",
+      "Bash(\"./DEBUG/bin/tftpserver_tests.exe\" --gtest_output=xml:full_test_results.xml)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(rm:*)"
     ],
     "deny": [],
     "ask": []

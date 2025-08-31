@@ -55,6 +55,9 @@ public:
     static std::unique_ptr<TftpPacket> Parse(const std::vector<uint8_t>& data);
 
 private:
+    // Reset packet to clean state (used when deserialization fails)
+    void ResetState();
+    
     OpCode op_code_ = OpCode::kReadRequest;
     uint16_t block_number_ = 0;
     ErrorCode error_code_ = ErrorCode::kNotDefined;
