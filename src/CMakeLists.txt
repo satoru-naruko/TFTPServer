@@ -9,10 +9,12 @@ set(TFTPSERVER_SOURCES
     tftp_util.cpp
     tftp_logger.cpp
     tftp_validation.cpp
+    tftp_socket.cpp
     
     # Internal implementation files
     internal/tftp_server_impl.cpp
     internal/tftp_thread_pool.cpp
+    internal/tftp_socket_impl.cpp
     # internal/tftp_client_impl.cpp  # Disabled as not used
     # internal/tftp_curl_wrapper_impl.cpp  # Temporarily disabled (not used in tests)
     
@@ -28,10 +30,12 @@ set(TFTPSERVER_HEADERS
     ${CMAKE_SOURCE_DIR}/include/tftp/tftp_logger.h
     ${CMAKE_SOURCE_DIR}/include/tftp/tftp_common.h
     ${CMAKE_SOURCE_DIR}/include/tftp/tftp_validation.h
+    ${CMAKE_SOURCE_DIR}/include/tftp/tftp_socket.h
     
     # Internal headers
     internal/tftp_server_impl.h
     internal/tftp_thread_pool.h
+    internal/tftp_socket_impl.h
 )
 
 # Create TFTP server library
