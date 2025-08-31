@@ -14,7 +14,6 @@ set(TFTPSERVER_SOURCES
     # Internal implementation files
     internal/tftp_server_impl.cpp
     internal/tftp_thread_pool.cpp
-    internal/tftp_socket_impl.cpp
     # internal/tftp_client_impl.cpp  # Disabled as not used
     # internal/tftp_curl_wrapper_impl.cpp  # Temporarily disabled (not used in tests)
     
@@ -37,6 +36,13 @@ set(TFTPSERVER_HEADERS
     internal/tftp_thread_pool.h
     internal/tftp_socket_impl.h
 )
+
+# Add platform-specific socket implementation
+if(WIN32)
+    list(APPEND TFTPSERVER_SOURCES internal/tftp_socket_impl_win32.cpp)
+else()
+    list(APPEND TFTPSERVER_SOURCES internal/tftp_socket_impl_unix.cpp)
+endif()
 
 # Create TFTP server library
 add_library(tftpserver_lib STATIC ${TFTPSERVER_SOURCES} ${TFTPSERVER_HEADERS})

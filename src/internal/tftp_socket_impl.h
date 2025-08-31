@@ -10,18 +10,7 @@
 #include "tftp/tftp_logger.h"
 #include <string>
 
-#ifdef _WIN32
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#pragma comment(lib, "ws2_32.lib")
-#else
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <unistd.h>
-#include <errno.h>
-#include <cstring>
-#endif
+// Platform-specific includes are now in separate implementation files
 
 namespace tftpserver {
 namespace net {

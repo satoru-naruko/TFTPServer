@@ -1,13 +1,12 @@
+/**
+ * @file tftp_socket_impl_win32.cpp
+ * @brief Windows-specific socket implementation
+ */
+
 #include "internal/tftp_socket_impl.h"
 #include <algorithm>
 #include <cctype>
-
-#ifdef _WIN32
 #include <ws2tcpip.h>
-#else
-#include <sys/select.h>
-#include <fcntl.h>
-#endif
 
 namespace tftpserver {
 namespace net {
@@ -76,14 +75,8 @@ bool SocketImpl::SetReuseAddress(bool reuse) {
     }
     
     int opt = reuse ? 1 : 0;
-    int result;
-    
-#ifdef _WIN32
-    result = setsockopt(socket_, SOL_SOCKET, SO_REUSEADDR, 
-                        reinterpret_cast<const char*>(&opt), sizeof(opt));
-#else
-    result = setsockopt(socket_, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-#endif
+    int result = setsockopt(socket_, SOL_SOCKET, SO_REUSEADDR, 
+                           reinterpret_cast<const char*>(&opt), sizeof(opt));
     
     if (result != 0) {
         SetLastError("Failed to set SO_REUSEADDR: " + GetSystemErrorMessage());
@@ -107,14 +100,8 @@ int SocketImpl::SendTo(const void* data, size_t size, const SocketAddress& addr)
     }
     
     const sockaddr_in& sock_addr = addr.GetSockAddr();
-    
-#ifdef _WIN32
     int sent = sendto(socket_, static_cast<const char*>(data), static_cast<int>(size), 0,
                       reinterpret_cast<const sockaddr*>(&sock_addr), sizeof(sock_addr));
-#else
-    ssize_t sent = sendto(socket_, data, size, 0,
-                          reinterpret_cast<const sockaddr*>(&sock_addr), sizeof(sock_addr));
-#endif
     
     if (sent < 0) {
         SetLastError("Failed to send data: " + GetSystemErrorMessage());
@@ -127,7 +114,7 @@ int SocketImpl::SendTo(const void* data, size_t size, const SocketAddress& addr)
         TFTP_WARN("Partial send: %d bytes sent out of %zu", sent, size);
     }
     
-    return static_cast<int>(sent);
+    return sent;
 }
 
 int SocketImpl::ReceiveFrom(void* buffer, size_t buffer_size, SocketAddress& sender_addr) {
@@ -144,13 +131,8 @@ int SocketImpl::ReceiveFrom(void* buffer, size_t buffer_size, SocketAddress& sen
     sockaddr_in& sock_addr = sender_addr.GetSockAddr();
     socklen_t addr_len = sizeof(sock_addr);
     
-#ifdef _WIN32
     int received = recvfrom(socket_, static_cast<char*>(buffer), static_cast<int>(buffer_size), 0,
                             reinterpret_cast<sockaddr*>(&sock_addr), &addr_len);
-#else
-    ssize_t received = recvfrom(socket_, buffer, buffer_size, 0,
-                                reinterpret_cast<sockaddr*>(&sock_addr), &addr_len);
-#endif
     
     if (received < 0) {
         SetLastError("Failed to receive data: " + GetSystemErrorMessage());
@@ -162,7 +144,7 @@ int SocketImpl::ReceiveFrom(void* buffer, size_t buffer_size, SocketAddress& sen
         TFTP_DEBUG("Received 0 bytes (connection closed)");
     }
     
-    return static_cast<int>(received);
+    return received;
 }
 
 int SocketImpl::ReceiveFromTimeout(void* buffer, size_t buffer_size, SocketAddress& sender_addr, int timeout_ms) {
@@ -180,12 +162,8 @@ int SocketImpl::ReceiveFromTimeout(void* buffer, size_t buffer_size, SocketAddre
     timeout.tv_sec = timeout_ms / 1000;
     timeout.tv_usec = (timeout_ms % 1000) * 1000;
     
-#ifdef _WIN32
     // On Windows, the first parameter to select is ignored
     int result = select(0, &readfds, nullptr, nullptr, &timeout);
-#else
-    int result = select(static_cast<int>(socket_) + 1, &readfds, nullptr, nullptr, &timeout);
-#endif
     
     if (result < 0) {
         SetLastError("Select failed: " + GetSystemErrorMessage());
@@ -206,13 +184,8 @@ int SocketImpl::ReceiveFromTimeout(void* buffer, size_t buffer_size, SocketAddre
 
 void SocketImpl::Close() {
     if (socket_ != kInvalidSocket) {
-        TFTP_DEBUG("Closing socket (handle: %d)", static_cast<int>(socket_));
-        
-#ifdef _WIN32
+        TFTP_DEBUG("Closing Windows socket (handle: %d)", static_cast<int>(socket_));
         closesocket(socket_);
-#else
-        close(socket_);
-#endif
         socket_ = kInvalidSocket;
     }
 }
@@ -234,7 +207,6 @@ void SocketImpl::SetLastError(const std::string& error) {
 }
 
 std::string SocketImpl::GetSystemErrorMessage() const {
-#ifdef _WIN32
     int error_code = WSAGetLastError();
     LPSTR message_buffer = nullptr;
     size_t size = FormatMessageA(
@@ -250,14 +222,11 @@ std::string SocketImpl::GetSystemErrorMessage() const {
                                    [](unsigned char ch) { return !std::isspace(ch); }).base(),
                       message.end());
     } else {
-        message = "Error code " + std::to_string(error_code);
+        message = "WSA Error code " + std::to_string(error_code);
     }
     
     LocalFree(message_buffer);
     return message;
-#else
-    return std::strerror(errno);
-#endif
 }
 
 } // namespace internal
