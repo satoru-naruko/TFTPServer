@@ -4,9 +4,11 @@
 set(TFTPSERVER_SOURCES
     # Main source files
     tftp_server.cpp
+    tftp_client.cpp
     tftp_packet.cpp
     tftp_util.cpp
     tftp_logger.cpp
+    tftp_validation.cpp
     
     # Internal implementation files
     internal/tftp_server_impl.cpp
@@ -25,6 +27,7 @@ set(TFTPSERVER_HEADERS
     ${CMAKE_SOURCE_DIR}/include/tftp/tftp_util.h
     ${CMAKE_SOURCE_DIR}/include/tftp/tftp_logger.h
     ${CMAKE_SOURCE_DIR}/include/tftp/tftp_common.h
+    ${CMAKE_SOURCE_DIR}/include/tftp/tftp_validation.h
     
     # Internal headers
     internal/tftp_server_impl.h
