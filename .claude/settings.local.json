@@ -1,33 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(curl:*)",
-      "Bash(dir)",
-      "Bash(cmake:*)",
-      "Bash(.DEBUGbintftpserver_tests.exe --gtest_list_tests)",
-      "Bash(./DEBUG/bin/tftpserver_tests.exe:*)",
-      "Bash(ctest:*)",
-      "WebSearch",
-      "WebFetch(domain:datatracker.ietf.org)",
-      "WebFetch(domain:curl.se)",
-      "Bash(where tftp.exe)",
-      "Bash(where atftp.exe)",
-      "Bash(powershell:*)",
-      "Bash(grep:*)",
-      "Bash(./DEBUG/bin/server_example.exe:*)",
-      "Bash(taskkill:*)",
-      "Bash(timeout 10 ctest -C Debug --output-on-failure -R \"TftpServerTest.FileDownload\" -V)",
-      "Bash(cat:*)",
-      "Bash(setup_dev_env.cmd)",
       "Bash(git checkout:*)",
-      "Bash(g++:*)",
-      "Bash(Debug\\bin\\tftpserver_tests.exe --gtest_filter=\"TftpPacketSecurityTest.*\" --gtest_output=xml:packet_security_test_results.xml)",
-      "Bash(\"./DEBUG/bin/tftpserver_tests.exe\" --gtest_filter=\"TftpPacketSecurityTest.*\")",
-      "Bash(\"./DEBUG/bin/tftpserver_tests.exe\" --gtest_filter=\"TftpPacketSecurityTest.BufferOverflow_OversizedOptionName\" --gtest_output=xml:focused_test_results.xml)",
-      "Bash(\"./DEBUG/bin/tftpserver_tests.exe\" --gtest_output=xml:full_test_results.xml)",
-      "Bash(git add:*)",
-      "Bash(git commit:*)",
-      "Bash(rm:*)"
+      "Bash(grep:*)",
+      "Bash(cmake:*)",
+      "Bash(ctest:*)",
+      "Bash(cl:*)",
+      "Bash(./tftpserver_tests.exe --gtest_filter=\"*Log*\" --gtest_brief=1)"
     ],
     "deny": [],
     "ask": []
