@@ -148,6 +148,18 @@ TftpPacket TftpPacket::CreateData(uint16_t block_number, const std::vector<uint8
     return packet;
 }
 
+TftpPacket TftpPacket::CreateData(uint16_t block_number, std::vector<uint8_t>&& data) {
+    if (data.size() > kMaxDataSize) {
+        throw TftpException("Data size exceeds maximum allowed size");
+    }
+    
+    TftpPacket packet;
+    packet.op_code_ = OpCode::kData;
+    packet.block_number_ = block_number;
+    packet.data_ = std::move(data);
+    return packet;
+}
+
 TftpPacket TftpPacket::CreateAck(uint16_t block_number) {
     TftpPacket packet;
     packet.op_code_ = OpCode::kAcknowledge;
@@ -204,7 +216,7 @@ std::vector<uint8_t> TftpPacket::Serialize() const {
         case OpCode::kReadRequest:
         case OpCode::kWriteRequest: {
             // RRQ/WRQ packet: opcode + filename + 0 + mode + 0 + (options)
-            std::string mode_str = mode_to_string(mode_);
+            const std::string& mode_str = mode_to_string(mode_);
             
             // Calculate total size: opcode(2) + filename + null + mode + null
             size_t total_size = 2 + filename_.length() + 1 + mode_str.length() + 1;
@@ -214,41 +226,47 @@ std::vector<uint8_t> TftpPacket::Serialize() const {
                 total_size += option.first.length() + 1 + option.second.length() + 1;
             }
             
-            result.resize(total_size);
+            result.reserve(total_size);
             
             // opcode (convert from host byte order to network byte order)
             uint16_t opcode_network = htons(static_cast<uint16_t>(op_code_));
-            std::memcpy(&result[0], &opcode_network, sizeof(uint16_t));
+            result.resize(2);
+            std::memcpy(result.data(), &opcode_network, sizeof(uint16_t));
             
             // filename + null terminator
-            size_t offset = 2;
-            copy_string(result, offset, filename_);
+            result.insert(result.end(), filename_.begin(), filename_.end());
+            result.push_back(0);
             
             // mode + null terminator
-            copy_string(result, offset, mode_str);
+            result.insert(result.end(), mode_str.begin(), mode_str.end());
+            result.push_back(0);
             
             // options
             for (const auto& option : options_) {
-                copy_string(result, offset, option.first);   // option name
-                copy_string(result, offset, option.second);  // option value
+                result.insert(result.end(), option.first.begin(), option.first.end());
+                result.push_back(0);
+                result.insert(result.end(), option.second.begin(), option.second.end());
+                result.push_back(0);
             }
             
             break;
         }
         case OpCode::kData: {
             // DATA packet: opcode + block# + data
-            result.resize(4 + data_.size());
+            result.reserve(4 + data_.size());
             
             // opcode (convert from host byte order to network byte order)
             uint16_t opcode_network = htons(static_cast<uint16_t>(op_code_));
-            std::memcpy(&result[0], &opcode_network, sizeof(uint16_t));
+            result.resize(2);
+            std::memcpy(result.data(), &opcode_network, sizeof(uint16_t));
             
             // block number (convert from host byte order to network byte order)
             uint16_t block_number_network = htons(block_number_);
-            std::memcpy(&result[2], &block_number_network, sizeof(uint16_t));
+            result.resize(4);
+            std::memcpy(result.data() + 2, &block_number_network, sizeof(uint16_t));
             
             // data
-            std::copy(data_.begin(), data_.end(), result.begin() + 4);
+            result.insert(result.end(), data_.begin(), data_.end());
             break;
         }
         case OpCode::kAcknowledge: {
@@ -257,28 +275,30 @@ std::vector<uint8_t> TftpPacket::Serialize() const {
             
             // opcode (convert from host byte order to network byte order)
             uint16_t opcode_network = htons(static_cast<uint16_t>(op_code_));
-            std::memcpy(&result[0], &opcode_network, sizeof(uint16_t));
+            std::memcpy(result.data(), &opcode_network, sizeof(uint16_t));
             
             // block number (convert from host byte order to network byte order)
             uint16_t block_number_network = htons(block_number_);
-            std::memcpy(&result[2], &block_number_network, sizeof(uint16_t));
+            std::memcpy(result.data() + 2, &block_number_network, sizeof(uint16_t));
             break;
         }
         case OpCode::kError: {
             // ERROR packet: opcode + errorcode + errmsg + 0
-            result.resize(4 + error_message_.length() + 1);
+            result.reserve(4 + error_message_.length() + 1);
             
             // opcode (convert from host byte order to network byte order)
             uint16_t opcode_network = htons(static_cast<uint16_t>(op_code_));
-            std::memcpy(&result[0], &opcode_network, sizeof(uint16_t));
+            result.resize(2);
+            std::memcpy(result.data(), &opcode_network, sizeof(uint16_t));
             
             // error code (convert from host byte order to network byte order)
             uint16_t error_code_network = htons(static_cast<uint16_t>(error_code_));
-            std::memcpy(&result[2], &error_code_network, sizeof(uint16_t));
+            result.resize(4);
+            std::memcpy(result.data() + 2, &error_code_network, sizeof(uint16_t));
             
             // error message + null terminator
-            size_t offset = 4;
-            copy_string(result, offset, error_message_);
+            result.insert(result.end(), error_message_.begin(), error_message_.end());
+            result.push_back(0);
             break;
         }
         case OpCode::kOACK: {
@@ -289,17 +309,19 @@ std::vector<uint8_t> TftpPacket::Serialize() const {
                 total_size += option.first.length() + 1 + option.second.length() + 1;
             }
             
-            result.resize(total_size);
+            result.reserve(total_size);
             
             // opcode (convert from host byte order to network byte order)
             uint16_t opcode_network = htons(static_cast<uint16_t>(op_code_));
-            std::memcpy(&result[0], &opcode_network, sizeof(uint16_t));
+            result.resize(2);
+            std::memcpy(result.data(), &opcode_network, sizeof(uint16_t));
             
             // options
-            size_t offset = 2;
             for (const auto& option : options_) {
-                copy_string(result, offset, option.first);   // option name
-                copy_string(result, offset, option.second);  // option value
+                result.insert(result.end(), option.first.begin(), option.first.end());
+                result.push_back(0);
+                result.insert(result.end(), option.second.begin(), option.second.end());
+                result.push_back(0);
             }
             
             break;
@@ -416,7 +438,6 @@ bool TftpPacket::Deserialize(const std::vector<uint8_t>& data) {
             
             while (offset < data.size() && options_count < kMaxOptionsCount) {
                 TFTP_INFO("Entering option parsing loop iteration %zu", options_count);
-                size_t option_name_offset = offset;
                 std::string option_name = read_string_validated(data, offset, kMaxOptionNameLength);
                 
                 // Check for parsing failure (indicated by offset being set to SIZE_MAX)
@@ -437,7 +458,6 @@ bool TftpPacket::Deserialize(const std::vector<uint8_t>& data) {
                     return false;
                 }
                 
-                size_t option_value_offset = offset;
                 std::string option_value = read_string_validated(data, offset, kMaxOptionValueLength);
                 
                 // Check for parsing failure (indicated by offset being set to SIZE_MAX)
