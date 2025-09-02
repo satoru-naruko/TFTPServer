@@ -6,7 +6,8 @@
       "Bash(cmake:*)",
       "Bash(ctest:*)",
       "Bash(cl:*)",
-      "Bash(./tftpserver_tests.exe --gtest_filter=\"*Log*\" --gtest_brief=1)"
+      "Bash(./tftpserver_tests.exe --gtest_filter=\"*Log*\" --gtest_brief=1)",
+      "Bash(git show:*)"
     ],
     "deny": [],
     "ask": []
