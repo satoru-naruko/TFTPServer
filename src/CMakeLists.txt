@@ -9,6 +9,7 @@ set(TFTPSERVER_SOURCES
     tftp_util.cpp
     tftp_logger.cpp
     tftp_validation.cpp
+    tftp_socket.cpp
     
     # Internal implementation files
     internal/tftp_server_impl.cpp
@@ -28,11 +29,20 @@ set(TFTPSERVER_HEADERS
     ${CMAKE_SOURCE_DIR}/include/tftp/tftp_logger.h
     ${CMAKE_SOURCE_DIR}/include/tftp/tftp_common.h
     ${CMAKE_SOURCE_DIR}/include/tftp/tftp_validation.h
+    ${CMAKE_SOURCE_DIR}/include/tftp/tftp_socket.h
     
     # Internal headers
     internal/tftp_server_impl.h
     internal/tftp_thread_pool.h
+    internal/tftp_socket_impl.h
 )
+
+# Add platform-specific socket implementation
+if(WIN32)
+    list(APPEND TFTPSERVER_SOURCES internal/tftp_socket_impl_win32.cpp)
+else()
+    list(APPEND TFTPSERVER_SOURCES internal/tftp_socket_impl_unix.cpp)
+endif()
 
 # Create TFTP server library
 add_library(tftpserver_lib STATIC ${TFTPSERVER_SOURCES} ${TFTPSERVER_HEADERS})
