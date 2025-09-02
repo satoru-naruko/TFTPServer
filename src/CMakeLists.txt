@@ -92,10 +92,33 @@ if(BUILD_SHARED_LIBS)
     target_compile_definitions(tftpserver_lib INTERFACE TFTP_IMPORTS)
 endif()
 
-# Debug information settings
+# Build configuration settings
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     target_compile_definitions(tftpserver_lib PRIVATE 
         DEBUG
         _DEBUG
+    )
+elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
+    target_compile_definitions(tftpserver_lib PRIVATE 
+        NDEBUG
+        TFTP_PRODUCTION_BUILD  # Enable production logging optimizations
+    )
+elseif(CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+    target_compile_definitions(tftpserver_lib PRIVATE 
+        NDEBUG
+        TFTP_PRODUCTION_BUILD
+    )
+elseif(CMAKE_BUILD_TYPE STREQUAL "MinSizeRel")
+    target_compile_definitions(tftpserver_lib PRIVATE 
+        NDEBUG
+        TFTP_PRODUCTION_BUILD
+        TFTP_MINIMAL_LOGGING  # Most aggressive logging reduction
+    )
+endif()
+
+# Option to override log level at build time
+if(DEFINED TFTP_CUSTOM_LOG_LEVEL)
+    target_compile_definitions(tftpserver_lib PRIVATE 
+        TFTP_LOG_LEVEL=${TFTP_CUSTOM_LOG_LEVEL}
     )
 endif() 
