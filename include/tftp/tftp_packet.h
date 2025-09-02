@@ -47,6 +47,7 @@ public:
     static TftpPacket CreateReadRequest(const std::string& filename, TransferMode mode);
     static TftpPacket CreateWriteRequest(const std::string& filename, TransferMode mode);
     static TftpPacket CreateData(uint16_t block_number, const std::vector<uint8_t>& data);
+    static TftpPacket CreateData(uint16_t block_number, std::vector<uint8_t>&& data);
     static TftpPacket CreateAck(uint16_t block_number);
     static TftpPacket CreateError(ErrorCode code, const std::string& message);
     static TftpPacket CreateOACK(const std::unordered_map<std::string, std::string>& options);

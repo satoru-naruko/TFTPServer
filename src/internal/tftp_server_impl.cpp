@@ -210,7 +210,12 @@ void TftpServerImpl::ServerLoop() {
                 std::lock_guard<std::mutex> lock(thread_pool_mutex_);
                 if (thread_pool_ && !thread_pool_->IsShuttingDown()) {
                     try {
-                        thread_pool_->Submit([this, packet_data = std::vector<uint8_t>(buffer, buffer + recvlen), client_addr]() {
+                        // Create vector once and move it to avoid copy
+                        std::vector<uint8_t> packet_data;
+                        packet_data.reserve(recvlen);
+                        packet_data.assign(buffer, buffer + recvlen);
+                        
+                        thread_pool_->Submit([this, packet_data = std::move(packet_data), client_addr]() {
                             this->HandleClient(packet_data, client_addr);
                         });
                     } catch (const std::exception& e) {
@@ -350,10 +355,13 @@ void TftpServerImpl::HandleReadRequest(
         // Prepare next data block
         size_t remaining = file_data.size() - offset;
         size_t block_size = (remaining > kMaxDataSize) ? kMaxDataSize : remaining;
-        std::vector<uint8_t> block_data(file_data.begin() + offset, file_data.begin() + offset + block_size);
         
-        // Create and send data packet
-        TftpPacket data_packet = TftpPacket::CreateData(block_number, block_data);
+        // Create and send data packet with optimized vector creation
+        std::vector<uint8_t> block_data;
+        block_data.reserve(block_size);
+        block_data.assign(file_data.begin() + offset, file_data.begin() + offset + block_size);
+        
+        TftpPacket data_packet = TftpPacket::CreateData(block_number, std::move(block_data));
         if (!SendPacket(sock, client_addr, data_packet)) {
             TFTP_ERROR("Data packet send failed");
             return;
@@ -773,7 +781,9 @@ bool TftpServerImpl::DefaultReadHandler(const std::string& path, std::vector<uin
     std::streamsize file_size = file.tellg();
     file.seekg(0, std::ios::beg);
     
-    // Prepare buffer
+    // Prepare buffer with reserve first to avoid potential reallocation
+    data.clear();
+    data.reserve(static_cast<size_t>(file_size));
     data.resize(static_cast<size_t>(file_size));
     
     // Read file
